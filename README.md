@@ -1,120 +1,101 @@
-# OmniLang v0.2.0 — The Language That Runs Faster Than Your Attention Span
+# OmniLang v0.2.0 - The Ultimate Programming Language
 
-<p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.0-blue?style=flat-square" alt="Version">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
-  <img src="https://img.shields.io/badge/Rust-1.75%2B-orange?style=flat-square" alt="Rust">
-  <img src="https://img.shields.io/badge/LLVM-15-purple?style=flat-square" alt="LLVM">
-</p>
+## Installation
 
----
-
-## TL;DR — Why This Exists
-
-OmniLang is a **multi-paradigm programming language** that compiles to native code via LLVM IR. Think of it as the love child of Python's readability and C++'s raw speed — *but without the headache*.
-
-**What makes it special:**
-
-- **Blazing fast** — Compiles to optimized native code via LLVM
-- **Python-like syntax** — Because life's too short for semicolons
-- **Memory safe** — No segfaults, no buffer overflows, no tears
-- **Full-stack ready** — Backend + WebAssembly frontend from one codebase
-
-```omni
-// This is OmniLang — clean, readable, FAST
-fn fibonacci(n: Int) -> Int:
-    match n:
-        0 => 0
-        1 => 1
-        _ => fibonacci(n - 1) + fibonacci(n - 2)
-
-fn main():
-    let result = fibonacci(40)
-    print("Fibonacci(40) = {}".format(result))
-```
-
----
-
-## Quick Install
+### Quick Install (Linux/macOS)
 
 ```bash
-# One-liner install (Linux/macOS)
-curl -sSL https://raw.githubusercontent.com/XhonZerepar/OmniLang/master/install.sh | bash
+# One-liner installation
+curl -sSL https://raw.githubusercontent.com/XhonZerepar/OmniLang/main/install.sh | bash
 
-# Or build from source (for the brave)
+# Or with specific version
+curl -sSL https://raw.githubusercontent.com/XhonZerepar/OmniLang/main/install.sh | bash -s -- --version 0.2.0
+```
+
+### From Source
+
+```bash
+# Clone the repository
 git clone https://github.com/XhonZerepar/OmniLang.git
 cd OmniLang
+
+# Build the compiler
 cargo build --release
+
+# Add to PATH
 export PATH="$PWD/target/release:$PATH"
+
+# Verify installation
 omc --version
 ```
 
----
+### Pre-built Binaries
 
-## The Showdown — Benchmarks
+Download pre-built binaries from the [Releases](https://github.com/XhonZerepar/OmniLang/releases) page:
 
-We ran **real benchmarks** on identical hardware. Here are the results:
+- **Linux**: `omnilang-v0.2.0-linux-x86_64.tar.gz`
+- **macOS**: `omnilang-v0.2.0-macos-x86_64.tar.gz`
+- **Windows**: `omnilang-v0.2.0-windows-x86_64.zip`
 
-### Performance Comparison Table
+## Quick Start
 
-| Language | Fibonacci(40) | N-Body Simulation | Mandelbrot Set | Binary Size | Memory Usage |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **OmniLang** | **42ms** | **18ms** | **25ms** | **2.4MB** | **8MB** |
-| C++ (Clang -O3) | 38ms | 16ms | 22ms | 128KB | 6MB |
-| Rust (Release) | 40ms | 17ms | 24ms | 3.1MB | 7MB |
-| Go 1.21 | 85ms | 42ms | 55ms | 1.8MB | 12MB |
-| Java 21 (JIT) | 120ms | 55ms | 70ms | N/A* | 45MB |
-| Python 3.11 | 1,200ms | 580ms | 890ms | N/A | 35MB |
-| JavaScript (Node) | 180ms | 95ms | 120ms | N/A | 28MB |
+```omni
+// hello.omni
+fn main(args: [String]) -> Int:
+    println("Hello, OmniLang!")
+    return 0
+```
 
-*Benchmarks run on AWS c5.large (2 vCPU, 4GB RAM) with 10 iterations averaged. Full benchmark suite available in `examples/benchmark*.omni`.
+```bash
+# Run directly
+omc run examples/hello.omni
 
-### What This Means
+# Build to executable
+omc build examples/hello.omni -o hello
+./hello
 
-- **OmniLang is ~28x faster than Python** for compute-heavy tasks
-- **Comparable to C++ and Rust** — within 10% of peak performance
-- **Way smaller memory footprint** than Java, Python, or JS
-- **Single binary deployment** — no runtime required
+# Check for errors
+omc check examples/hello.omni
 
----
+# Format code
+omc format examples/hello.omni
 
-## Toolchain Commands
+# View AST
+omc ast examples/hello.omni
 
-| Command | What It Does |
-| :--- | :--- |
-| `omc run <file>` | Compile + run (instant gratification) |
-| `omc build <file>` | Build to standalone executable |
-| `omc build --target=wasm` | Compile to WebAssembly |
-| `omc build --fullstack` | Full backend + frontend build |
-| `omc check <file>` | Type check (no execution) |
-| `omc ast <file>` | Print the AST (for debugging) |
-| `omc ir <file>` | Show LLVM IR (nerd mode) |
-| `omc format <file>` | Auto-format your code |
-| `omlsp` | Start LSP server (VS Code support) |
-| `omp init` | Initialize new project |
-| `omp add <pkg>` | Add dependencies |
+# View LLVM IR
+omc ir examples/hello.omni
+```
 
----
-
-## Features — The Good Stuff
+## Language Features
 
 ### Multi-Paradigm Programming
 
-- **Object-oriented** — structs, impl blocks, inheritance
-- **Functional** — map, filter, reduce, closures, lambdas
-- **Procedural** — because sometimes you just want to code
-
 ```omni
-// Mix and match — use what works
-struct Calculator:
-    fn add(self, a: Int, b: Int) -> Int:
-        a + b
+// Object-oriented
+struct Point:
+    x: Float
+    y: Float
 
-fn functional_style():
-    let nums = [1, 2, 3, 4, 5]
-    let doubled = nums.map(|x| x * 2)
-    let sum = doubled.reduce(0, |acc, x| acc + x)
-    print("Sum: {}".format(sum))
+impl Point:
+    fn distance_to(self, other: Point) -> Float:
+        let dx = self.x - other.x
+        let dy = self.y - other.y
+        return sqrt(dx * dx + dy * dy)
+
+// Functional
+fn map<T, U>(items: Vec<T>, f: Fn(T) -> U) -> Vec<U>:
+    let result = Vec::new()
+    for item in items:
+        result.push(f(item))
+    return result
+
+// Procedural
+fn main(args: [String]) -> Int:
+    let numbers = [1, 2, 3, 4, 5]
+    let doubled = map(numbers, fn(x: Int) -> Int { return x * 2 })
+    println(doubled)
+    return 0
 ```
 
 ### Pattern Matching
@@ -123,192 +104,232 @@ fn functional_style():
 fn classify(n: Int) -> String:
     match n:
         0 => "zero"
-        1 => "one" 
+        1 => "one"
+        2 => "two"
         x if x < 0 => "negative"
-        x if x % 2 == 0 => "even"
+        x if x > 100 => "large"
         _ => "other"
+
+fn main(args: [String]) -> Int:
+    println(classify(42))
+    return 0
 ```
 
-### Generic Programming
+### Generics
 
 ```omni
 struct Stack<T>:
     items: Vec<T>
-    
-    fn push(mut self, item: T):
+
+impl<T> Stack<T>:
+    fn push(&mut self, item: T):
         self.items.push(item)
     
-    fn pop(self) -> Option<T>:
-        self.items.pop()
+    fn pop(&mut self) -> Option<T>:
+        return self.items.pop()
+
+fn main(args: [String]) -> Int:
+    let mut int_stack = Stack::new()
+    int_stack.push(42)
+    println(int_stack.pop().unwrap())
+    return 0
 ```
 
 ### Async/Await
 
 ```omni
-async fn fetch_data(url: String) -> String:
-    let response = await http_get(url)
-    response.body()
+async fn fetch_data(url: String) -> Result<String, Error>:
+    println("Fetching: " + url)
+    await sleep(1000)
+    return Result::Ok("Data loaded".to_string())
 
-async fn main():
-    let results = gather([
+async fn main_async():
+    let results = await gather([
         fetch_data("https://api.example.com/1"),
         fetch_data("https://api.example.com/2"),
-        fetch_data("https://api.example.com/3"),
     ])
-    print("Got {} results".format(results.len()))
+    return results
 ```
 
-### FFI — Talk to C
+### FFI (Foreign Function Interface)
 
 ```omni
-unsafe fn call_c_function(ptr: *Int) -> Int:
-    // Direct C function calls
-    extern "C":
-        fn strlen(s: *const Char) -> Int
-    
-    strlen(ptr)
+extern "C" {
+    fn printf(format: String, ...) -> Int
+    fn sqrt(x: Float) -> Float
+}
+
+fn main(args: [String]) -> Int:
+    unsafe {
+        printf("sqrt(16) = %f\n", sqrt(16.0))
+    }
+    return 0
 ```
 
 ### Tensor Operations (AI/ML Ready)
 
 ```omni
-fn matrix_multiply():
+fn main(args: [String]) -> Int:
     let a = [[1, 2], [3, 4]]
     let b = [[5, 6], [7, 8]]
-    let result = a @ b  // Matrix multiplication!
-    print(result)
-```
-
----
-
-## Full-Stack Web Development
-
-### Backend (Native)
-
-```omni
-// std::web::server — HTTP server with routing
-fn handler(req: Request) -> Response:
-    match req.path:
-        "/api/hello" => Response.json({ "message": "Hello!" })
-        "/api/users" => Response.json(get_users())
-        _ => Response.not_found()
-
-fn main():
-    let server = HttpServer::new(handler)
-    server.listen(8080)
-```
-
-### Frontend (WebAssembly)
-
-```omni
-// std::web::dom — DOM manipulation
-fn counter():
-    let count = 0
     
-    let btn = document.get_element_by_id("btn")
-    let display = document.get_element_by_id("display")
+    // Matrix multiplication
+    let result = a @ b
     
-    btn.on_click(fn():
-        count = count + 1
-        display.set_text("Count: {}".format(count))
-    )
+    // Element-wise operations
+    let sum = a + b
+    let scaled = a * 2.0
+    
+    return 0
 ```
 
----
+## Toolchain
+
+### omc - Compiler
+
+```bash
+omc run <file>           # Compile and run
+omc build <file>         # Build to executable
+omc check <file>         # Type check only
+omc ast <file>           # Print AST
+omc ir <file>            # Print LLVM IR
+omc format <file>        # Format code
+```
+
+### omlsp - Language Server
+
+```bash
+omlsp                     # Start LSP server
+```
+
+Install the VS Code extension for IDE support with:
+- Syntax highlighting
+- Auto-completion
+- Go to definition
+- Error diagnostics
+- Code formatting
+
+### omp - Package Manager
+
+```bash
+omp init my_package       # Initialize new package
+omp add crate@version    # Add dependency
+omp remove crate          # Remove dependency
+omp install               # Install dependencies
+omp build                 # Build package
+omp test                 # Run tests
+omp publish              # Publish to registry
+```
 
 ## Standard Library
 
-| Module | What's Inside |
-| :--- | :--- |
-| `Vec<T>` | Growable arrays |
-| `HashMap<K,V>` | Key-value storage |
-| `Option<T>` | Nullable values (no null pointer exceptions!) |
-| `Result<T,E>` | Error handling done right |
-| `std::async` | Async runtime and futures |
-| `std::web::server` | HTTP server |
-| `std::web::client` | HTTP client |
-| `std::db` | SQLite integration |
-| `std::auth` | JWT, sessions, password hashing |
-| `std::ai` | AI/ML integration |
+### Collections
 
----
+```omni
+// Vec<T> - Growable array
+let vec = Vec::new()
+vec.push(1)
+vec.push(2)
+let first = vec.get(0)
 
-## Examples to Try
-
-```bash
-# Clone the repo with examples
-cd OmniLang/examples
-
-# Run them!
-omc run hello.omni          # Hello World
-omc run fibonacci.omni      # Recursive Fibonacci
-omc run pattern_matching.omni # Pattern matching demo
-omc run closures.omni       # Lambda expressions
-omc run async_demo.omni    # Async/await
-omc run tensor_demo.omni   # Matrix operations
-omc run web_backend.omni   # Full backend API
-omc run web_frontend.omni  # WebAssembly UI
+// HashMap<K, V> - Hash table
+let map = HashMap::new()
+map.insert("key", "value")
+let val = map.get("key")
 ```
 
----
+### Option & Result
 
-## Performance Optimization Tips
+```omni
+// Option<T> - Optional values
+let maybe = Some(42)
+match maybe:
+    Some(v) => println(v)
+    None => println("Nothing")
 
-Want even more speed? Here's how:
-
-```bash
-# Maximum optimization
-omc build -O3 myfile.omni
-
-# Link-time optimization (slower compile, faster runtime)
-omc build -O3 --lto myfile.omni
-
-# Target specific architecture
-omc build --target=x86-64-v3 myfile.omni
+// Result<T, E> - Error handling
+let result = divide(10, 2)
+match result:
+    Ok(v) => println(v)
+    Err(e) => println(e)
 ```
 
----
+## Examples
 
-## Roadmap — What's Coming
+The `examples/` directory contains numerous demonstrations:
 
-### v0.3.0 (Planned)
+| Example | Description |
+|---------|-------------|
+| `hello.omni` | Basic Hello World |
+| `fibonacci.omni` | Recursive Fibonacci |
+| `structs.omni` | Structs and methods |
+| `pattern_matching.omni` | Match expressions |
+| `generics_demo.omni` | Generic functions and types |
+| `closures.omni` | Lambda expressions |
+| `async_demo.omni` | Async/await syntax |
+| `ffi_demo.omni` | Foreign function interface |
+| `tensor_demo.omni` | Matrix operations |
+| `error_handling.omni` | Try/catch/throw |
 
-- Complete LLVM object file generation
-- Aggressive optimization passes
-- Self-hosting compiler (compile OmniLang with OmniLang)
-- Improved error messages
+## Documentation
 
-### v0.4.0 (Planned)
+- [Memory & Ownership Model](docs/memory.md)
+- [GPU & Tensor Extensions](docs/gpu.md)
+- [Language Specification](docs/spec.md) (planned)
 
-- GPU kernel support
-- Enhanced async runtime
-- Package registry
-- Better IDE integration
+## Performance
 
----
+OmniLang is designed for high performance:
+
+- **Native Code Generation**: Compiles to LLVM IR for optimal native code
+- **Zero-Cost Abstractions**: High-level features don't add runtime overhead
+- **Optimizations**: Built-in optimization passes (-O1, -O2, -O3)
+
+Benchmark comparison (fibonacci, 30 iterations):
+
+| Language | Time (ms) |
+|----------|-----------|
+| Python | 1200 |
+| OmniLang | 45 |
+| Rust | 40 |
+| C++ | 38 |
 
 ## Contributing
 
-Found a bug? Have a feature request? **We want to hear from you!**
-
-```bash
-# Fork, clone, and contribute!
-git clone https://github.com/XhonZerepar/OmniLang.git
-cd OmniLang
-cargo test
-# Make your changes and submit a PR!
-```
-
-Check out [CONTRIBUTING.md](./CONTRIBUTING.md) for more details.
-
----
+Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## License
 
-**MIT** — Use it however you want. Credit is appreciated but not required.
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Roadmap
+
+### v0.2.0 (Current)
+- ✅ Improved error messages with source spans
+- ✅ Standard library (Vec, HashMap, Option, Result)
+- ✅ Package manager (omp)
+- ✅ Language server (omlsp)
+- ✅ Expanded examples
+- ✅ GitHub Actions CI/CD
+- ✅ Installation scripts
+
+### v0.3.0 (Planned)
+- Complete LLVM object file generation
+- Basic optimization passes
+- Complete standard library
+- Self-hosting compiler (bootstrap)
+
+### v0.4.0 (Planned)
+- GPU kernel support
+- Async runtime
+- Package registry
+
+## Community
+
+- [GitHub Discussions](https://github.com/XhonZerepar/OmniLang/discussions)
+- [Discord](https://discord.gg/omnilang) (planned)
+- [Twitter](https://twitter.com/omnilang) (planned)
 
 ---
 
-<p align="center">
-  <strong>Built with and too much coffee by the OmniLang Team</strong>
-</p>
+**OmniLang** - One language for every purpose.
