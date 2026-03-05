@@ -1,0 +1,22 @@
+[package]
+name = "omnilang"
+version = "0.1.0"
+edition = "2021"
+description = "OmniLang - The Ultimate Programming Language"
+authors = ["OmniLang Team"]
+license = "MIT"
+
+[dependencies]
+omnilang = { path = ".." }
+
+[build-dependencies]
+
+[features]
+default = ["llvm16-0"]
+llvm14-0 = ["omnilang/llvm14-0"]
+llvm15-0 = ["omnilang/llvm15-0"]
+llvm16-0 = ["omnilang/llvm16-0"]
+
+[[bin]]
+name = "main"
+path = "main.omni"

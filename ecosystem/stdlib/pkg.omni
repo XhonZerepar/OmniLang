@@ -1,0 +1,463 @@
+// OmniLang Package Manager
+// Advanced package management for OmniLang projects
+
+module std::pkg
+
+// Package manifest
+pub struct Manifest:
+    name: String
+    version: String
+    description: String
+    authors: [String]
+    license: String
+    repository: Option<String>
+    homepage: Option<String>
+    keywords: [String]
+    dependencies: HashMap<String, String>
+    dev_dependencies: HashMap<String, String>
+    targets: [String]
+
+impl Manifest:
+    pub fn new(name: String, version: String) -> Manifest:
+        return Manifest {
+            name: name,
+            version: version,
+            description: "".to_string(),
+            authors: [],
+            license: "MIT".to_string(),
+            repository: Option::None,
+            homepage: Option::None,
+            keywords: [],
+            dependencies: HashMap::new(),
+            dev_dependencies: HashMap::new(),
+            targets: ["native".to_string()]
+        }
+    
+    pub fn with_description(&mut self, desc: String) -> Manifest:
+        self.description = desc
+        return self
+    
+    pub fn with_author(&mut self, author: String) -> Manifest:
+        self.authors.push(author)
+        return self
+    
+    pub fn with_license(&mut self, license: String) -> Manifest:
+        self.license = license
+        return self
+    
+    pub fn with_repository(&mut self, repo: String) -> Manifest:
+        self.repository = Option::Some(repo)
+        return self
+    
+    pub fn with_homepage(&mut self, url: String) -> Manifest:
+        self.homepage = Option::Some(url)
+        return self
+    
+    pub fn with_keyword(&mut self, keyword: String) -> Manifest:
+        self.keywords.push(keyword)
+        return self
+    
+    pub fn add_dependency(&mut self, name: String, version: String):
+        self.dependencies.set(name, version)
+    
+    pub fn add_dev_dependency(&mut self, name: String, version: String):
+        self.dev_dependencies.set(name, version)
+    
+    pub fn add_target(&mut self, target: String):
+        self.targets.push(target)
+    
+    pub fn to_toml(&self) -> String:
+        var toml = "[package]\n"
+        toml = toml + "name = \"" + self.name + "\"\n"
+        toml = toml + "version = \"" + self.version + "\"\n"
+        
+        if self.description != "":
+            toml = toml + "description = \"" + self.description + "\"\n"
+        
+        if self.authors.len() > 0:
+            toml = toml + "authors = " + self.authors.to_toml_array() + "\n"
+        
+        if self.license != "":
+            toml = toml + "license = \"" + self.license + "\"\n"
+        
+        match self.repository:
+            Some(repo) => toml = toml + "repository = \"" + repo + "\"\n"
+            None => ()
+        
+        match self.homepage:
+            Some(url) => toml = toml + "homepage = \"" + url + "\"\n"
+            None => ()
+        
+        if self.keywords.len() > 0:
+            toml = toml + "keywords = " + self.keywords.to_toml_array() + "\n"
+        
+        if self.dependencies.len() > 0:
+            toml = toml + "\n[dependencies]\n"
+            for (name, version) in self.dependencies.iter():
+                toml = toml + name + " = \"" + version + "\"\n"
+        
+        if self.dev_dependencies.len() > 0:
+            toml = toml + "\n[dev-dependencies]\n"
+            for (name, version) in self.dev_dependencies.iter():
+                toml = toml + name + " = \"" + version + "\"\n"
+        
+        if self.targets.len() > 0:
+            toml = toml + "\n[targets]\n"
+            toml = toml + "default = " + self.targets.first().to_toml_string() + "\n"
+        
+        return toml
+
+// Package info
+pub struct PackageInfo:
+    name: String
+    version: String
+    description: String
+    authors: [String]
+    downloads: Int
+    stars: Int
+    license: String
+    repository: String
+    homepage: String
+
+// Registry
+pub struct Registry:
+    url: String
+
+impl Registry:
+    pub fn new(url: String) -> Registry:
+        return Registry { url: url }
+    
+    pub fn default() -> Registry:
+        return Registry::new("https://registry.omnilang.dev")
+    
+    pub fn search(&self, query: String, limit: Int) -> Result<[PackageInfo], Error>:
+        return native_registry_search(self.url, query, limit)
+    
+    pub fn get_info(&self, name: String) -> Result<PackageInfo, Error>:
+        return native_registry_info(self.url, name)
+    
+    pub fn get_versions(&self, name: String) -> Result<[String], Error>:
+        return native_registry_versions(self.url, name)
+    
+    pub fn download(&self, name: String, version: String, dest: String) -> Result<String, Error>:
+        return native_registry_download(self.url, name, version, dest)
+
+// Version resolution
+pub enum VersionConstraint:
+    Exact(String)
+    GreaterThan(String)
+    GreaterThanOrEqual(String)
+    LessThan(String)
+    LessThanOrEqual(String)
+    Range(String, String)
+    Any
+
+impl VersionConstraint:
+    pub fn parse(spec: String) -> VersionConstraint:
+        if spec == "*":
+            return VersionConstraint::Any
+        
+        if spec.starts_with("="):
+            return VersionConstraint::Exact(spec[1..].to_string())
+        
+        if spec.starts_with(">="):
+            return VersionConstraint::GreaterThanOrEqual(spec[2..].to_string())
+        
+        if spec.starts_with(">"):
+            return VersionConstraint::GreaterThan(spec[1..].to_string())
+        
+        if spec.starts_with("<="):
+            return VersionConstraint::LessThanOrEqual(spec[2..].to_string())
+        
+        if spec.starts_with("<"):
+            return VersionConstraint::LessThan(spec[1..].to_string())
+        
+        if spec.contains(" - "):
+            let parts = spec.split(" - ")
+            return VersionConstraint::Range(parts[0], parts[1])
+        
+        // Default to exact version
+        return VersionConstraint::Exact(spec)
+    
+    pub fn satisfies(&self, version: String) -> Bool:
+        match self:
+            VersionConstraint::Exact(v) => return version == v
+            VersionConstraint::Any => return true
+            VersionConstraint::GreaterThan(v) => return compare_versions(version, v) > 0
+            VersionConstraint::GreaterThanOrEqual(v) => return compare_versions(version, v) >= 0
+            VersionConstraint::LessThan(v) => return compare_versions(version, v) < 0
+            VersionConstraint::LessThanOrEqual(v) => return compare_versions(version, v) <= 0
+            VersionConstraint::Range(min, max) => 
+                return compare_versions(version, min) >= 0 && compare_versions(version, max) <= 0
+    
+    pub fn to_string(&self) -> String:
+        match self:
+            VersionConstraint::Exact(v) => "=".to_string() + v
+            VersionConstraint::Any => "*".to_string()
+            VersionConstraint::GreaterThan(v) => ">".to_string() + v
+            VersionConstraint::GreaterThanOrEqual(v) => ">=".to_string() + v
+            VersionConstraint::LessThan(v) => "<".to_string() + v
+            VersionConstraint::LessThanOrEqual(v) => "<=".to_string() + v
+            VersionConstraint::Range(min, max) => min.to_string() + " - " + max.to_string()
+
+fn compare_versions(a: String, b: String) -> Int:
+    let a_parts = a.split(".").map(|s| s.parse_int().unwrap_or(0)).collect()
+    let b_parts = b.split(".").map(|s| s.parse_int().unwrap_or(0)).collect()
+    
+    let max_len = if a_parts.len() > b_parts.len() a_parts.len() else b_parts.len()
+    
+    for i in 0..max_len:
+        let a_val = if i < a_parts.len() a_parts[i] else 0
+        let b_val = if i < b_parts.len() b_parts[i] else 0
+        
+        if a_val < b_val:
+            return -1
+        if a_val > b_val:
+            return 1
+    
+    return 0
+
+// Dependency resolver
+pub struct Resolver:
+    registry: Registry
+    cache: HashMap<String, PackageInfo>
+
+impl Resolver:
+    pub fn new(registry: Registry) -> Resolver:
+        return Resolver {
+            registry: registry,
+            cache: HashMap::new()
+        }
+    
+    pub fn resolve(&self, deps: HashMap<String, String>) -> Result<HashMap<String, String>, Error>:
+        let resolved = HashMap::new()
+        
+        for (name, spec) in deps.iter():
+            let constraint = VersionConstraint::parse(spec)
+            let version = self.resolve_single(name, constraint)?
+            resolved.set(name, version)
+        
+        return Result::Ok(resolved)
+    
+    fn resolve_single(&self, name: String, constraint: VersionConstraint) -> Result<String, Error>:
+        // Check cache first
+        if self.cache.contains_key(name):
+            let info = self.cache.get(name).unwrap()
+            if constraint.satisfies(info.version):
+                return Result::Ok(info.version)
+        
+        // Fetch from registry
+        let versions = self.registry.get_versions(name)?
+        
+        // Find matching version
+        for version in versions:
+            if constraint.satisfies(version):
+                // Cache it
+                let info = self.registry.get_info(name)?
+                self.cache.set(name, info)
+                return Result::Ok(version)
+        
+        return Result::Err(Error::new("No matching version found for " + name))
+
+// Package cache
+pub struct PackageCache:
+    directory: String
+
+impl PackageCache:
+    pub fn new() -> PackageCache:
+        let home = std::os::home_dir()
+        return PackageCache {
+            directory: home + "/.omni/cache"
+        }
+    
+    pub fn with_directory(&mut self, dir: String) -> PackageCache:
+        self.directory = dir
+        return self
+    
+    pub fn path(&self, name: String, version: String) -> String:
+        return self.directory + "/" + name + "-" + version
+    
+    pub fn exists(&self, name: String, version: String) -> Bool:
+        return std::fs::exists(self.path(name, version))
+    
+    pub fn get(&self, name: String, version: String) -> Result<String, Error>:
+        let p = self.path(name, version)
+        if not self.exists(name, version):
+            return Result::Err(Error::new("Package not in cache: " + name + "@" + version))
+        return Result::Ok(p)
+    
+    pub fn add(&self, name: String, version: String, source: String) -> Result<(), Error>:
+        let dest = self.path(name, version)
+        std::fs::create_dir_all(dest)?
+        std::fs::copy_file(source, dest + "/package.tar.gz")?
+        return Result::Ok(())
+    
+    pub fn remove(&self, name: String, version: String) -> Result<(), Error>:
+        let p = self.path(name, version)
+        if self.exists(name, version):
+            std::fs::remove_dir_all(p)?
+        return Result::Ok(())
+    
+    pub fn list(&self) -> [(String, String)]:
+        var packages = []
+        
+        if not std::fs::exists(self.directory):
+            return packages
+        
+        for entry in std::fs::read_dir(self.directory)?:
+            if entry.is_dir:
+                let name = entry.name
+                // Parse name-version format
+                let parts = name.split("-")
+                if parts.len() >= 2:
+                    let version = parts.last()
+                    let name_without_version = parts[0..parts.len()-1].join("-")
+                    packages.push((name_without_version, version))
+        
+        return packages
+    
+    pub fn clear(&self) -> Result<(), Error>:
+        if std::fs::exists(self.directory):
+            std::fs::remove_dir_all(self.directory)?
+            std::fs::create_dir_all(self.directory)?
+        return Result::Ok(())
+    
+    pub fn size(&self) -> Int64:
+        if not std::fs::exists(self.directory):
+            return 0
+        
+        var total = 0
+        
+        for entry in std::fs::read_dir(self.directory)?:
+            total = total + entry.size
+        
+        return total
+
+// Lock file
+pub struct LockFile:
+    version: String
+    packages: HashMap<String, LockedPackage>
+
+pub struct LockedPackage:
+    name: String
+    version: String
+    source: String
+    checksum: String
+
+impl LockFile:
+    pub fn new() -> LockFile:
+        return LockFile {
+            version: "1".to_string(),
+            packages: HashMap::new()
+        }
+    
+    pub fn add_package(&mut self, name: String, version: String, source: String, checksum: String):
+        self.packages.set(name, LockedPackage {
+            name: name,
+            version: version,
+            source: source,
+            checksum: checksum
+        })
+    
+    pub fn to_toml(&self) -> String:
+        var toml = "version = \"" + self.version + "\"\n\n[[package]]\n"
+        
+        for (name, pkg) in self.packages.iter():
+            toml = toml + "name = \"" + pkg.name + "\"\n"
+            toml = toml + "version = \"" + pkg.version + "\"\n"
+            toml = toml + "source = \"" + pkg.source + "\"\n"
+            toml = toml + "checksum = \"" + pkg.checksum + "\"\n"
+            toml = toml + "\n"
+        
+        return toml
+    
+    pub fn from_toml(toml: String) -> Result<LockFile, Error>:
+        // Parse TOML and create LockFile
+        return Result::Ok(LockFile::new())
+
+// Package builder
+pub struct Builder:
+    manifest: Manifest
+    output_dir: String
+
+impl Builder:
+    pub fn new(manifest: Manifest) -> Builder:
+        return Builder {
+            manifest: manifest,
+            output_dir: "target/pkg".to_string()
+        }
+    
+    pub fn with_output_dir(&mut self, dir: String) -> Builder:
+        self.output_dir = dir
+        return self
+    
+    pub fn build(&self) -> Result<String, Error>:
+        // Create output directory
+        std::fs::create_dir_all(self.output_dir)?
+        
+        // Compile sources
+        let sources = self.find_sources()?
+        
+        for source in sources:
+            self.compile(source)?
+        
+        // Create package archive
+        let archive_path = self.create_archive()?
+        
+        return Result::Ok(archive_path)
+    
+    fn find_sources(&self) -> Result<[String], Error>:
+        // Find all .omni files in src directory
+        return Result::Ok([])
+    
+    fn compile(&self, source: String) -> Result<(), Error>:
+        // Compile single source file
+        return Result::Ok(())
+    
+    fn create_archive(&self) -> Result<String, Error>:
+        let name = self.manifest.name.replace(" ", "_")
+        let version = self.manifest.version
+        let archive_name = name + "-" + version + ".tar.gz"
+        let archive_path = self.output_dir + "/" + archive_name
+        
+        // Create tar.gz archive
+        // (implementation depends on native functions)
+        
+        return Result::Ok(archive_path)
+
+// Publisher
+pub struct Publisher:
+    registry: Registry
+    api_key: Option<String>
+
+impl Publisher:
+    pub fn new(registry: Registry) -> Publisher:
+        return Publisher {
+            registry: registry,
+            api_key: Option::None
+        }
+    
+    pub fn with_api_key(&mut self, key: String) -> Publisher:
+        self.api_key = Option::Some(key)
+        return self
+    
+    pub fn publish(&self, package_path: String) -> Result<(), Error>:
+        match self.api_key:
+            Some(key) => 
+                // Publish to registry
+                return native_registry_publish(self.registry.url, package_path, key)
+            None => 
+                return Result::Err(Error::new("API key required for publishing"))
+
+// CLI integration helpers
+pub fn init_package(name: String, version: String) -> Manifest:
+    return Manifest::new(name, version)
+
+pub fn load_manifest(path: String) -> Result<Manifest, Error>:
+    let content = std::fs::read_file(path)?
+    // Parse TOML content
+    return Result::Ok(Manifest::new("unknown", "0.0.0"))
+
+pub fn save_manifest(manifest: Manifest, path: String) -> Result<(), Error>:
+    let content = manifest.to_toml()
+    std::fs::write_file(path, content)

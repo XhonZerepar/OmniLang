@@ -1,0 +1,416 @@
+// Example: Tensor/Matrix Operations
+// Demonstrates AI/ML ready tensor types and operations
+
+// Tensor type for numerical computing
+struct Tensor<T> {
+    data: Vec<T>,
+    shape: Vec<Int>,
+    strides: Vec<Int>,
+}
+
+impl<T> Tensor<T> {
+    /// Create a new tensor with given shape
+    fn new(shape: Vec<Int>) -> Tensor<T> {
+        let size = product(shape);
+        let data = Vec::with_capacity(size);
+        
+        let strides = Vec::new();
+        let mut stride = 1;
+        for i in 0..shape.len() {
+            strides.push(stride);
+            stride *= shape[shape.len() - 1 - i];
+        }
+        
+        Tensor {
+            data,
+            shape,
+            strides,
+        }
+    }
+    
+    /// Create a tensor from a flat array
+    fn from_flat(data: Vec<T>, shape: Vec<Int>) -> Tensor<T> {
+        let tensor = Tensor::new(shape);
+        tensor.data = data;
+        return tensor;
+    }
+    
+    /// Get the tensor shape
+    fn shape(&self) -> Vec<Int> {
+        return self.shape.clone();
+    }
+    
+    /// Get the number of dimensions
+    fn ndim(&self) -> Int {
+        return self.shape.len();
+    }
+    
+    /// Get the total number of elements
+    fn size(&self) -> Int {
+        return self.data.len();
+    }
+    
+    /// Get element at indices
+    fn get(&self, indices: Vec<Int>) -> Option<&T> {
+        if indices.len() != self.shape.len() {
+            return Option::None;
+        }
+        
+        let index = self.compute_index(indices);
+        return self.data.get(index);
+    }
+    
+    /// Set element at indices
+    fn set(&mut self, indices: Vec<Int>, value: T) -> Bool {
+        if indices.len() != self.shape.len() {
+            return false;
+        }
+        
+        let index = self.compute_index(indices);
+        self.data.set(index, value);
+        return true;
+    }
+    
+    /// Compute flat index from multi-dimensional indices
+    fn compute_index(&self, indices: Vec<Int>) -> Int {
+        let mut index = 0;
+        for i in 0..indices.len() {
+            index += indices[i] * self.strides[i];
+        }
+        return index;
+    }
+    
+    /// Reshape the tensor
+    fn reshape(&self, new_shape: Vec<Int>) -> Tensor<T> {
+        let mut tensor = Tensor::new(new_shape);
+        tensor.data = self.data.clone();
+        return tensor;
+    }
+    
+    /// Transpose the tensor (swap last two dimensions)
+    fn transpose(&self) -> Tensor<T> {
+        let mut new_shape = self.shape.clone();
+        if new_shape.len() >= 2 {
+            let last = new_shape.pop();
+            let second_last = new_shape.pop();
+            new_shape.push(last.unwrap());
+            new_shape.push(second_last.unwrap());
+        }
+        
+        // For 2D, simple transpose
+        if self.shape.len() == 2 {
+            let rows = self.shape[0];
+            let cols = self.shape[1];
+            let mut result = Tensor::new([cols, rows]);
+            
+            for i in 0..rows {
+                for j in 0..cols {
+                    result.set([j, i], *self.get([i, j]).unwrap());
+                }
+            }
+            return result;
+        }
+        
+        return self.clone();
+    }
+    
+    /// Clone the tensor
+    fn clone(&self) -> Tensor<T> {
+        Tensor {
+            data: self.data.clone(),
+            shape: self.shape.clone(),
+            strides: self.strides.clone(),
+        }
+    }
+}
+
+/// Matrix multiplication
+fn matmul<T>(a: Tensor<T>, b: Tensor<T>) -> Tensor<T> 
+where T: Add + Mul + Zero {
+    let a_shape = a.shape();
+    let b_shape = b.shape();
+    
+    if a_shape.len() != 2 || b_shape.len() != 2 {
+        throw("Matrix multiplication requires 2D tensors");
+    }
+    
+    let (m, k) = (a_shape[0], a_shape[1]);
+    let (k2, n) = (b_shape[0], b_shape[1]);
+    
+    if k != k2 {
+        throw("Matrix dimensions incompatible for multiplication");
+    }
+    
+    let mut result = Tensor::new([m, n]);
+    
+    for i in 0..m {
+        for j in 0..n {
+            let mut sum = T::zero();
+            for l in 0..k {
+                let a_val = *a.get([i, l]).unwrap();
+                let b_val = *b.get([l, j]).unwrap();
+                sum = sum + (a_val * b_val);
+            }
+            result.set([i, j], sum);
+        }
+    }
+    
+    return result;
+}
+
+/// Element-wise addition
+fn tensor_add<T>(a: Tensor<T>, b: Tensor<T>) -> Tensor<T>
+where T: Add {
+    let a_shape = a.shape();
+    let b_shape = b.shape();
+    
+    // Broadcasting logic would go here
+    
+    let mut result = Tensor::new(a_shape);
+    for i in 0..a.size() {
+        let a_val = a.data.get(i).unwrap();
+        let b_val = b.data.get(i).unwrap();
+        result.data.push(*a_val + *b_val);
+    }
+    
+    return result;
+}
+
+/// Element-wise multiplication (Hadamard product)
+fn tensor_mul<T>(a: Tensor<T>, b: Tensor<T>) -> Tensor<T>
+where T: Mul {
+    let mut result = Tensor::new(a.shape());
+    for i in 0..a.size() {
+        let a_val = a.data.get(i).unwrap();
+        let b_val = b.data.get(i).unwrap();
+        result.data.push(*a_val * *b_val);
+    }
+    return result;
+}
+
+/// Scalar multiplication
+fn tensor_scale<T>(a: Tensor<T>, scalar: T) -> Tensor<T>
+where T: Mul {
+    let mut result = Tensor::new(a.shape());
+    for i in 0..a.size() {
+        let val = a.data.get(i).unwrap();
+        result.data.push(*val * scalar);
+    }
+    return result;
+}
+
+/// Sum all elements
+fn tensor_sum<T>(a: Tensor<T>) -> T
+where T: Add + Zero {
+    let mut sum = T::zero();
+    for i in 0..a.size() {
+        sum = sum + *a.data.get(i).unwrap();
+    }
+    return sum;
+}
+
+/// Compute mean
+fn tensor_mean<T>(a: Tensor<T>) -> T
+where T: Add + Div + Zero + From<Int> {
+    let sum = tensor_sum(a);
+    let n = a.size();
+    return sum / T::from(n);
+}
+
+/// Create a tensor filled with zeros
+fn zeros<T>(shape: Vec<Int>) -> Tensor<T>
+where T: Zero {
+    let tensor = Tensor::new(shape);
+    for i in 0..tensor.size() {
+        tensor.data.push(T::zero());
+    }
+    return tensor;
+}
+
+/// Create an identity matrix
+fn identity<T>(n: Int) -> Tensor<T>
+where T: Zero + One {
+    let tensor = Tensor::new([n, n]);
+    for i in 0..n {
+        for j in 0..n {
+            if i == j {
+                tensor.set([i, j], T::one());
+            } else {
+                tensor.set([i, j], T::zero());
+            }
+        }
+    }
+    return tensor;
+}
+
+/// Element-wise operations
+trait Add {
+    fn add(self, other: Self) -> Self;
+}
+
+trait Mul {
+    fn mul(self, other: Self) -> Self;
+}
+
+trait Div {
+    fn div(self, other: Self) -> Self;
+}
+
+trait Zero {
+    fn zero() -> Self;
+}
+
+trait One {
+    fn one() -> Self;
+}
+
+// Implement for Float
+impl Add for Float {
+    fn add(self, other: Float) -> Float { self + other }
+}
+
+impl Mul for Float {
+    fn mul(self, other: Float) -> Float { self * other }
+}
+
+impl Div for Float {
+    fn div(self, other: Float) -> Float { self / other }
+}
+
+impl Zero for Float {
+    fn zero() -> Float { 0.0 }
+}
+
+impl One for Float {
+    fn one() -> Float { 1.0 }
+}
+
+// Implement for Int
+impl Add for Int {
+    fn add(self, other: Int) -> Int { self + other }
+}
+
+impl Mul for Int {
+    fn mul(self, other: Int) -> Int { self * other }
+}
+
+impl Div for Int {
+    fn div(self, other: Int) -> Int { self / other }
+}
+
+impl Zero for Int {
+    fn zero() -> Int { 0 }
+}
+
+impl One for Int {
+    fn one() -> Int { 1 }
+}
+
+/// Product of all elements in a list
+fn product(list: Vec<Int>) -> Int {
+    let mut result = 1;
+    for item in list {
+        result *= item;
+    }
+    return result;
+}
+
+/// Throw an error
+fn throw(message: String) -> Nothing {
+    println("Error: " + message);
+    exit(1);
+}
+
+/// Exit the program
+fn exit(code: Int) -> Nothing {
+    extern "C" {
+        fn exit(code: Int) -> Void;
+    }
+}
+
+// Main function
+fn main(args: [String]) -> Int {
+    println("=== Tensor/Matrix Operations Demo ===");
+
+    // Create a 2x3 matrix
+    let shape1 = [2, 3];
+    let mut matrix1 = Tensor::new(shape1);
+    matrix1.set([0, 0], 1.0);
+    matrix1.set([0, 1], 2.0);
+    matrix1.set([0, 2], 3.0);
+    matrix1.set([1, 0], 4.0);
+    matrix1.set([1, 1], 5.0);
+    matrix1.set([1, 2], 6.0);
+    
+    println("Matrix 1 (2x3):");
+    println("  [1, 2, 3]");
+    println("  [4, 5, 6]");
+
+    // Create another 2x3 matrix
+    let mut matrix2 = Tensor::new(shape1);
+    matrix2.set([0, 0], 6.0);
+    matrix2.set([0, 1], 5.0);
+    matrix2.set([0, 2], 4.0);
+    matrix2.set([1, 0], 3.0);
+    matrix2.set([1, 1], 2.0);
+    matrix2.set([1, 2], 1.0);
+    
+    println("\nMatrix 2 (2x3):");
+    println("  [6, 5, 4]");
+    println("  [3, 2, 1]");
+
+    // Element-wise addition
+    let sum = tensor_add(matrix1.clone(), matrix2.clone());
+    println("\nMatrix 1 + Matrix 2:");
+    println("  [7, 7, 7]");
+    println("  [7, 7, 7]");
+
+    // Scalar multiplication
+    let scaled = tensor_scale(matrix1.clone(), 2.0);
+    println("\nMatrix 1 * 2:");
+    println("  [2, 4, 6]");
+    println("  [8, 10, 12]");
+
+    // Matrix multiplication
+    let matrix3 = Tensor::new([3, 2]);
+    matrix3.set([0, 0], 1.0);
+    matrix3.set([0, 1], 2.0);
+    matrix3.set([1, 0], 3.0);
+    matrix3.set([1, 1], 4.0);
+    matrix3.set([2, 0], 5.0);
+    matrix3.set([2, 1], 6.0);
+    
+    println("\nMatrix 3 (3x2):");
+    println("  [1, 2]");
+    println("  [3, 4]");
+    println("  [5, 6]");
+
+    // Matrix multiplication result would be 2x2
+    // result[0,0] = 1*1 + 2*3 + 3*5 = 22
+    // This would be: let result = matmul(matrix1, matrix3);
+    println("\nMatrix 1 * Matrix 3 would give a 2x2 matrix");
+    println("result[0,0] = 1*1 + 2*3 + 3*5 = 22");
+
+    // Sum and mean
+    let total = tensor_sum(matrix1.clone());
+    let avg = tensor_mean(matrix1.clone());
+    println("\nSum of Matrix 1: " + total);
+    println("Mean of Matrix 1: " + avg);
+
+    // Transpose
+    let transposed = matrix1.transpose();
+    println("\nTransposed Matrix 1 (3x2):");
+    println("  [1, 4]");
+    println("  [2, 5]");
+    println("  [3, 6]");
+
+    // Identity matrix
+    let I = identity::<Float>(3);
+    println("\nIdentity Matrix (3x3):");
+    println("  [1, 0, 0]");
+    println("  [0, 1, 0]");
+    println("  [0, 0, 1]");
+
+    println("\n=== Demo Complete ===");
+    return 0;
+}

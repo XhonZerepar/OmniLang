@@ -1,0 +1,295 @@
+//! OmniLang Standard Library - Web Client Module
+//! 
+//! Provides HTTP client functionality for making requests to servers.
+//! Works on both native (server-side) and WASM (browser-side) targets.
+
+module std::web::client;
+
+import std::web::{Request, Response, HttpMethod, HttpStatus, JSONValue};
+
+/// HTTP Client for making requests
+pub struct Client {
+    base_url: String,
+    default_headers: HashMap<String, String>,
+    timeout_ms: Int,
+}
+
+impl Client {
+    /// Create a new HTTP client
+    pub fn new() -> Client {
+        Client {
+            base_url: "".to_string(),
+            default_headers: HashMap::new(),
+            timeout_ms: 30000, // 30 second default timeout
+        }
+    }
+    
+    /// Set the base URL for all requests
+    pub fn with_base_url(mut self, url: String) -> Client {
+        self.base_url = url;
+        self
+    }
+    
+    /// Set default headers for all requests
+    pub fn with_header(mut self, key: String, value: String) -> Client {
+        self.default_headers.insert(key, value);
+        self
+    }
+    
+    /// Set the request timeout
+    pub fn with_timeout(mut self, timeout_ms: Int) -> Client {
+        self.timeout_ms = timeout_ms;
+        self
+    }
+    
+    /// Set authorization header
+    pub fn with_auth(mut self, token: String) -> Client {
+        self.default_headers.insert("Authorization".to_string(), "Bearer " + token);
+        self
+    }
+    
+    /// Send a GET request
+    pub fn get(&self, path: String) -> RequestBuilder {
+        RequestBuilder::new(self, HttpMethod::Get, path)
+    }
+    
+    /// Send a POST request
+    pub fn post(&self, path: String) -> RequestBuilder {
+        RequestBuilder::new(self, HttpMethod::Post, path)
+    }
+    
+    /// Send a PUT request
+    pub fn put(&self, path: String) -> RequestBuilder {
+        RequestBuilder::new(self, HttpMethod::Put, path)
+    }
+    
+    /// Send a DELETE request
+    pub fn delete(&self, path: String) -> RequestBuilder {
+        RequestBuilder::new(self, HttpMethod::Delete, path)
+    }
+    
+    /// Send a PATCH request
+    pub fn patch(&self, path: String) -> RequestBuilder {
+        RequestBuilder::new(self, HttpMethod::Patch, path)
+    }
+}
+
+/// Request builder for constructing HTTP requests
+pub struct RequestBuilder {
+    client: &Client,
+    method: HttpMethod,
+    path: String,
+    headers: HashMap<String, String>,
+    body: Option<Vec<u8>>,
+    query_params: HashMap<String, String>,
+    timeout_ms: Int,
+}
+
+impl RequestBuilder {
+    fn new(client: &Client, method: HttpMethod, path: String) -> RequestBuilder {
+        let mut headers = client.default_headers.clone();
+        // Copy default headers
+        for (k, v) in client.default_headers.clone() {
+            headers.insert(k, v);
+        }
+        
+        RequestBuilder {
+            client,
+            method,
+            path,
+            headers,
+            body: None,
+            query_params: HashMap::new(),
+            timeout_ms: client.timeout_ms,
+        }
+    }
+    
+    /// Add a query parameter
+    pub fn query(mut self, key: String, value: String) -> RequestBuilder {
+        self.query_params.insert(key, value);
+        self
+    }
+    
+    /// Add a header
+    pub fn header(mut self, key: String, value: String) -> RequestBuilder {
+        self.headers.insert(key, value);
+        self
+    }
+    
+    /// Set request body
+    pub fn body(mut self, body: Vec<u8>) -> RequestBuilder {
+        self.body = Some(body);
+        self
+    }
+    
+    /// Set JSON body
+    pub fn json<T: Serialize>(mut self, data: &T) -> RequestBuilder {
+        self.headers.insert("Content-Type".to_string(), "application/json".to_string());
+        self.body = Some(data.to_json().into_bytes());
+        self
+    }
+    
+    /// Set text body
+    pub fn text(mut self, text: String) -> RequestBuilder {
+        self.headers.insert("Content-Type".to_string(), "text/plain".to_string());
+        self.body = Some(text.into_bytes());
+        self
+    }
+    
+    /// Set form body
+    pub fn form(mut self, data: HashMap<String, String>) -> RequestBuilder {
+        self.headers.insert("Content-Type".to_string(), "application/x-www-form-urlencoded".to form_body = data_string());
+        let.iter()
+            .map(|(k, v) => url_encode(k) + "=" + url_encode(v))
+            .collect::<Vec<_>>()
+            .join("&");
+        self.body = Some(form_body.into_bytes());
+        self
+    }
+    
+    /// Set timeout for this request
+    pub fn timeout(mut self, timeout_ms: Int) -> RequestBuilder {
+        self.timeout_ms = timeout_ms;
+        self
+    }
+    
+    /// Send the request and get response
+    pub fn send(self) -> async fn() -> Result<Response, HttpError> {
+        async fn() -> Result<Response, HttpError> {
+            // Build full URL
+            let mut url = self.client.base_url.clone();
+            if !url.ends_with('/') && !self.path.starts_with('/') {
+                url = url + "/";
+            }
+            url = url + &self.path;
+            
+            // Add query parameters
+            if self.query_params.len() > 0 {
+                let params = self.query_params.iter()
+                    .map(|(k, v) => url_encode(k) + "=" + url_encode(v))
+                    .collect::<Vec<_>>()
+                    .join("&");
+                if url.contains('?') {
+                    url = url + "&" + params;
+                } else {
+                    url = url + "?" + params;
+                }
+            }
+            
+            // Make the actual HTTP request
+            // Implementation varies by platform:
+            // - Native: uses reqwest or similar crate via FFI
+            // - WASM: uses fetch API via JS bindings
+            
+            // For now, return a placeholder
+            Ok(Response::new().with_text("Response from " + url))
+        }
+    }
+    
+    /// Send request and get JSON response
+    pub fn json<T: Deserialize>(self) -> async fn() -> Result<T, HttpError> {
+        async fn() -> Result<T, HttpError> {
+            let response = await self.send()?;
+            let body = String::from_utf8(response.body)
+                .map_err(|e| HttpError::new(500, e.to_string()))?;
+            T::from_json(&body)
+                .map_err(|e| HttpError::new(500, e))
+        }
+    }
+    
+    /// Send request and get text response
+    pub fn text(self) -> async fn() -> Result<String, HttpError> {
+        async fn() -> Result<String, HttpError> {
+            let response = await self.send()?;
+            String::from_utf8(response.body)
+                .map_err(|e| HttpError::new(500, e.to_string()))
+        }
+    }
+    
+    /// Send request and get status code
+    pub fn status(self) -> async fn() -> Result<Int, HttpError> {
+        async fn() -> Result<Int, HttpError> {
+            let response = await self.send()?;
+            Ok(response.status.code)
+        }
+    }
+}
+
+/// HTTP Error type
+pub struct HttpError {
+    pub status_code: Int,
+    pub message: String,
+}
+
+impl HttpError {
+    pub fn new(status_code: Int, message: String) -> HttpError {
+        HttpError { status_code, message }
+    }
+    
+    pub fn is_timeout(&self) -> Bool {
+        self.status_code == 408
+    }
+    
+    pub fn is_network_error(&self) -> Bool {
+        self.status_code == 0
+    }
+    
+    pub fn is_client_error(&self) -> Bool {
+        self.status_code >= 400 && self.status_code < 500
+    }
+    
+    pub fn is_server_error(&self) -> Bool {
+        self.status_code >= 500
+    }
+}
+
+/// URL encoding utility
+fn url_encode(s: &str) -> String {
+    // Simple URL encoding
+    let mut encoded = String::new();
+    for c in s.chars() {
+        match c {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => {
+                encoded.push(c);
+            }
+            _ => {
+                // Encode as %XX
+                let bytes = c.to_string().as_bytes();
+                for b in bytes {
+                    encoded = encoded + "%" + &format!("{:02X}", b);
+                }
+            }
+        }
+    }
+    encoded
+}
+
+/// Convenience function to create a client
+/// 
+/// # Example
+/// ```
+/// let client = client::new()
+///     .with_base_url("https://api.example.com")
+///     .with_auth("my-token");
+/// 
+/// let users = await client.get("/users").json::<Vec<User>>();
+/// ```
+pub fn new() -> Client {
+    Client::new()
+}
+
+/// Convenience function for making a simple GET request
+pub fn get(url: String) -> RequestBuilder {
+    let client = Client::new();
+    client.get(url)
+}
+
+/// Convenience function for making a simple POST request
+pub fn post(url: String) -> RequestBuilder {
+    let client = Client::new();
+    client.post(url)
+}
+
+// Re-export for convenience
+use std::web::Serialize;
+use std::web::Deserialize;

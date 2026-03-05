@@ -1,0 +1,212 @@
+// OmniLang Standard Library - File System Module
+// Provides file system operations and path manipulation
+
+module std::fs
+
+// File mode permissions
+pub struct FileMode:
+    readable: Bool
+    writable: Bool
+    executable: Bool
+
+// File information
+pub struct FileInfo:
+    path: String
+    size: UInt64
+    is_dir: Bool
+    is_file: Bool
+    is_symlink: Bool
+    created: Int64
+    modified: Int64
+    accessed: Int64
+
+// File open modes
+pub enum FileMode:
+    Read
+    Write
+    Append
+    ReadWrite
+    ReadAppend
+
+// Read entire file into string
+pub fn read_file(path: String) -> Result<String, Error>:
+    let content = native_read_file(path)
+    match content:
+        Ok(data) => Result::Ok(data)
+        Err(e) => Result::Err(e)
+
+// Write string to file
+pub fn write_file(path: String, content: String) -> Result<(), Error>:
+    let result = native_write_file(path, content)
+    match result:
+        Ok(_) => Result::Ok(())
+        Err(e) => Result::Err(e)
+
+// Append to file
+pub fn append_file(path: String, content: String) -> Result<(), Error>:
+    let result = native_append_file(path, content)
+    match result:
+        Ok(_) => Result::Ok(())
+        Err(e) => Result::Err(e)
+
+// Read file as lines
+pub fn read_lines(path: String) -> Result<[String], Error>:
+    let content = read_file(path)?
+    return content.split("\n")
+
+// Write lines to file
+pub fn write_lines(path: String, lines: [String]) -> Result<(), Error>:
+    let content = lines.join("\n")
+    return write_file(path, content)
+
+// Copy file
+pub fn copy_file(from: String, to: String) -> Result<(), Error>:
+    let content = read_file(from)?
+    return write_file(to, content)
+
+// Move file
+pub fn move_file(from: String, to: String) -> Result<(), Error>:
+    copy_file(from, to)?
+    return delete_file(from)
+
+// Delete file
+pub fn delete_file(path: String) -> Result<(), Error>:
+    return native_delete_file(path)
+
+// Check if file exists
+pub fn exists(path: String) -> Bool:
+    return native_file_exists(path)
+
+// Get file info
+pub fn info(path: String) -> Result<FileInfo, Error>:
+    return native_file_info(path)
+
+// Create directory
+pub fn create_dir(path: String) -> Result<(), Error>:
+    return native_create_dir(path)
+
+// Create directory recursively
+pub fn create_dir_all(path: String) -> Result<(), Error>:
+    let parts = path.split("/")
+    let current = ""
+    
+    for part in parts:
+        if part == "":
+            continue
+        
+        current = current + "/" + part
+        if not exists(current):
+            create_dir(current)?
+    
+    return Result::Ok(())
+
+// Remove directory
+pub fn remove_dir(path: String) -> Result<(), Error>:
+    return native_remove_dir(path)
+
+// Remove directory recursively
+pub fn remove_dir_all(path: String) -> Result<(), Error>:
+    if is_dir(path):
+        for entry in read_dir(path)?:
+            let entry_path = path + "/" + entry
+            if entry.is_dir:
+                remove_dir_all(entry_path)?
+            else:
+                delete_file(entry_path)?
+    
+    return remove_dir(path)
+
+// Read directory contents
+pub fn read_dir(path: String) -> Result<[FileInfo], Error>:
+    return native_read_dir(path)
+
+// Check if path is directory
+pub fn is_dir(path: String) -> Bool:
+    let info = info(path)
+    match info:
+        Ok(i) => return i.is_dir
+        Err(_) => return false
+
+// Check if path is file
+pub fn is_file(path: String) -> Bool:
+    let info = info(path)
+    match info:
+        Ok(i) => return i.is_file
+        Err(_) => return false
+
+// Get file extension
+pub fn extension(path: String) -> String:
+    let parts = path.split(".")
+    if parts.len() > 1:
+        return parts.last()
+    return ""
+
+// Get file name without extension
+pub fn stem(path: String) -> String:
+    let filename = basename(path)
+    let ext = extension(path)
+    if ext != "":
+        return filename.split(".").first()
+    return filename
+
+// Get base name (file/dir name)
+pub fn basename(path: String) -> String:
+    let parts = path.split("/")
+    return parts.last()
+
+// Get directory name
+pub fn dirname(path: String) -> String:
+    let parts = path.split("/")
+    if parts.len() > 1:
+        return parts[0..parts.len()-1].join("/")
+    return "."
+
+// Join path components
+pub fn join(parts: [String]) -> String:
+    return parts.join("/")
+
+// Normalize path
+pub fn normalize(path: String) -> String:
+    let parts: [String] = []
+    
+    for part in path.split("/"):
+        if part == "" or part == ".":
+            continue
+        if part == "..":
+            if parts.len() > 0:
+                parts.pop()
+        else:
+            parts.push(part)
+    
+    let result = parts.join("/")
+    if path.starts_with("/"):
+        return "/" + result
+    return result
+
+// Get current working directory
+pub fn cwd() -> String:
+    return native_cwd()
+
+// Change working directory
+pub fn chdir(path: String) -> Result<(), Error>:
+    return native_chdir(path)
+
+// Create temporary file
+pub fn temp_file(prefix: String, suffix: String) -> Result<String, Error>:
+    return native_temp_file(prefix, suffix)
+
+// Create temporary directory
+pub fn temp_dir(prefix: String) -> Result<String, Error>:
+    return native_temp_dir(prefix)
+
+// Watch file for changes
+pub fn watch(path: String, callback: Fn(String)) -> Result<(), Error>:
+    return native_watch_file(path, callback)
+
+// Get home directory
+pub fn home_dir() -> String:
+    return native_home_dir()
+
+// Get temp directory
+pub fn temp_dir_path() -> String:
+    return native_temp_dir_path()

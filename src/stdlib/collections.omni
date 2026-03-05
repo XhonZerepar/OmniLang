@@ -1,0 +1,321 @@
+//! OmniLang Standard Library - Collections
+//! 
+//! Contains Vec<T>, HashMap<K, V>, and other collection types.
+
+/// A growable array type
+struct Vec<T> {
+    data: *T,
+    length: Int,
+    capacity: Int,
+}
+
+impl<T> Vec<T> {
+    /// Creates a new empty vector
+    fn new() -> Vec<T> {
+        Vec {
+            data: null(),
+            length: 0,
+            capacity: 0,
+        }
+    }
+
+    /// Creates a vector with a given capacity
+    fn with_capacity(capacity: Int) -> Vec<T> {
+        let data = malloc(size_of::<T>() * capacity) as *T;
+        Vec {
+            data,
+            length: 0,
+            capacity,
+        }
+    }
+
+    /// Returns the number of elements
+    fn len(&self) -> Int {
+        self.length
+    }
+
+    /// Returns true if the vector is empty
+    fn is_empty(&self) -> Bool {
+        self.length == 0
+    }
+
+    /// Returns the capacity of the vector
+    fn capacity(&self) -> Int {
+        self.capacity
+    }
+
+    /// Adds an element to the end of the vector
+    fn push(&mut self, value: T) -> Void {
+        if self.length >= self.capacity {
+            self.grow(self.capacity * 2 + 1);
+        }
+        self.data[self.length] = value;
+        self.length += 1;
+    }
+
+    /// Removes the last element from the vector
+    fn pop(&mut self) -> Option<T> {
+        if self.length == 0 {
+            return Option::None;
+        }
+        self.length -= 1;
+        return Option::Some(self.data[self.length]);
+    }
+
+    /// Gets an element by index
+    fn get(&self, index: Int) -> Option<&T> {
+        if index < 0 || index >= self.length {
+            return Option::None;
+        }
+        return Option::Some(&self.data[index]);
+    }
+
+    /// Gets a mutable reference to an element
+    fn get_mut(&mut self, index: Int) -> Option<&mut T> {
+        if index < 0 || index >= self.length {
+            return Option::None;
+        }
+        return Option::Some(&mut self.data[index]);
+    }
+
+    /// Sets an element at index
+    fn set(&mut self, index: Int, value: T) -> Void {
+        if index >= 0 && index < self.length {
+            self.data[index] = value;
+        }
+    }
+
+    /// Clears all elements from the vector
+    fn clear(&mut self) -> Void {
+        self.length = 0;
+    }
+
+    /// Resizes the vector to the given length
+    fn resize(&mut self, new_length: Int, value: T) -> Void {
+        if new_length > self.capacity {
+            self.grow(new_length);
+        }
+        while self.length < new_length {
+            self.push(value);
+        }
+        while self.length > new_length {
+            self.pop();
+        }
+    }
+
+    /// Extends the vector with another vector
+    fn extend(&mut self, other: &Vec<T>) -> Void {
+        for i in 0..other.len() {
+            self.push(other.data[i]);
+        }
+    }
+
+    /// Returns an iterator over the vector
+    fn iter(&self) -> VecIterator<T> {
+        VecIterator {
+            vec: self,
+            index: 0,
+        }
+    }
+
+    /// Internal function to grow the vector
+    fn grow(&mut self, new_capacity: Int) -> Void {
+        let new_data = malloc(size_of::<T>() * new_capacity) as *T;
+        
+        // Copy existing elements
+        for i in 0..self.length {
+            new_data[i] = self.data[i];
+        }
+        
+        // Free old data if needed
+        if self.capacity > 0 {
+            free(self.data as *Void);
+        }
+        
+        self.data = new_data;
+        self.capacity = new_capacity;
+    }
+}
+
+/// Iterator for Vec<T>
+struct VecIterator<T> {
+    vec: &Vec<T>,
+    index: Int,
+}
+
+impl<T> VecIterator<T> {
+    fn next(&mut self) -> Option<&T> {
+        if self.index >= self.vec.length {
+            return Option::None;
+        }
+        let result = Option::Some(&self.vec.data[self.index]);
+        self.index += 1;
+        return result;
+    }
+}
+
+/// A hash map implementation
+struct HashMap<K, V> {
+    buckets: Vec<Vec<(K, V)>>,
+    length: Int,
+}
+
+impl<K, V> HashMap<K, V> where K: Hash + Eq {
+    /// Creates a new empty hash map
+    fn new() -> HashMap<K, V> {
+        HashMap {
+            buckets: Vec::with_capacity(16),
+            length: 0,
+        }
+    }
+
+    /// Creates a hash map with initial capacity
+    fn with_capacity(capacity: Int) -> HashMap<K, V> {
+        HashMap {
+            buckets: Vec::with_capacity(capacity),
+            length: 0,
+        }
+    }
+
+    /// Returns the number of elements
+    fn len(&self) -> Int {
+        self.length
+    }
+
+    /// Returns true if the map is empty
+    fn is_empty(&self) -> Bool {
+        self.length == 0
+    }
+
+    /// Inserts a key-value pair
+    fn insert(&mut self, key: K, value: V) -> Option<V> {
+        let index = self.hash(&key) % self.buckets.len();
+        let bucket = &mut self.buckets[index];
+        
+        // Check if key already exists
+        for i in 0..bucket.len() {
+            if bucket[i].0 == old = bucket[i key {
+                let].1;
+                bucket[i].1 = value;
+                return Option::Some(old);
+            }
+        }
+        
+        // Insert new entry
+        bucket.push((key, value));
+        self.length += 1;
+        
+        // Resize if needed
+        if self.length > self.buckets.len() * 2 {
+            self.resize();
+        }
+        
+        return Option::None;
+    }
+
+    /// Gets a value by key
+    fn get(&self, key: &K) -> Option<&V> {
+        if self.buckets.len() == 0 {
+            return Option::None;
+        }
+        
+        let index = self.hash(key) % self.buckets.len();
+        let bucket = &self.buckets[index];
+        
+        for i in 0..bucket.len() {
+            if bucket[i].0 == *key {
+                return Option::Some(&bucket[i].1);
+            }
+        }
+        
+        return Option::None;
+    }
+
+    /// Removes a key-value pair
+    fn remove(&mut self, key: &K) -> Option<V> {
+        if self.buckets.len() == 0 {
+            return Option::None;
+        }
+        
+        let index = self.hash(key) % self.buckets.len();
+        let bucket = &mut self.buckets[index];
+        
+        for i in 0..bucket.len() {
+            if bucket[i].0 == *key {
+                let value = bucket[i].1;
+                bucket.pop(i);
+                self.length -= 1;
+                return Option::Some(value);
+            }
+        }
+        
+        return Option::None;
+    }
+
+    /// Returns true if the map contains the key
+    fn contains_key(&self, key: &K) -> Bool {
+        self.get(key).is_some()
+    }
+
+    /// Clears all entries
+    fn clear(&mut self) -> Void {
+        self.buckets.clear();
+        self.length = 0;
+    }
+
+    /// Internal hash function
+    fn hash(&self, key: &K) -> Int {
+        // Simple hash function - in real implementation, use proper hashing
+        let hash = 0;
+        // ... hash computation
+        return hash;
+    }
+
+    /// Internal resize function
+    fn resize(&mut self) -> Void {
+        // ... resize implementation
+    }
+}
+
+/// Hash trait for HashMap keys
+trait Hash {
+    fn hash(&self) -> Int;
+}
+
+impl Hash for Int {
+    fn hash(&self) -> Int {
+        *self
+    }
+}
+
+impl Hash for String {
+    fn hash(&self) -> Int {
+        let mut hash = 0;
+        for c in self.chars() {
+            hash = hash * 31 + c as Int;
+        }
+        return hash;
+    }
+}
+
+/// Allocate memory
+fn malloc(size: Int) -> *Void {
+    extern "C" {
+        fn malloc(size: usize) -> *Void;
+    }
+    unsafe { malloc(size as usize) }
+}
+
+/// Free memory
+fn free(ptr: *Void) -> Void {
+    extern "C" {
+        fn free(ptr: *Void) -> Void;
+    }
+    unsafe { free(ptr) }
+}
+
+/// Get size of a type
+fn size_of<T>() -> Int {
+    // Compile-time size computation
+    8 // Placeholder
+}

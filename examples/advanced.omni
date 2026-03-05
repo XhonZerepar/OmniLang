@@ -1,0 +1,98 @@
+// Advanced Features in OmniLang
+// Demonstrates generics, traits, derive macros, and metaprogramming
+
+// Generic function
+fn identity[T](value: T) -> T:
+    return value
+
+// Generic struct
+struct Container[T]:
+    value: T
+    
+    fn new(value: T) -> Container[T]:
+        return Container(value: value)
+    
+    fn get(self) -> T:
+        return self.value
+
+// Trait definition
+trait Printable:
+    fn print(self)
+    fn println(self):
+        self.print()
+        print("\n")
+
+// Implement trait for Int
+impl Printable for Int:
+    fn print(self):
+        print(self.to_string())
+
+// Implement trait for String
+impl Printable for String:
+    fn print(self):
+        print(self)
+
+// Derive macro for automatic implementations
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct Point2D:
+    x: Float
+    y: Float
+
+// Custom attribute
+#[attribute("custom_attr", value: "test")]
+fn decorated_function() -> Int:
+    return 42
+
+// Compile-time constant evaluation
+const SIZE: Int = 100
+const MESSAGE: String = "Compiled!"
+
+// Type alias
+type IntList = Vec[Int]
+
+// Pattern matching with destructuring
+fn process_point(point: (Float, Float)) -> String:
+    match point:
+        (0.0, 0.0) => "Origin"
+        (x, 0.0) => "On X axis: " + x
+        (0.0, y) => "On Y axis: " + y
+        (x, y) => "At (" + x + ", " + y + ")"
+
+fn main(args: [String]) -> Int:
+    // Generics
+    let container = Container.new(42)
+    println(container.get())
+    
+    // Traits
+    42.print()
+    "hello".println()
+    
+    // Derived traits
+    let p1 = Point2D(x: 1.0, y: 2.0)
+    let p2 = p1.clone()
+    println(p1 == p2)
+    
+    // Constants
+    println(MESSAGE)
+    
+    // Pattern matching
+    let point = (3.0, 4.0)
+    println(process_point(point))
+    
+    // Closures
+    let add = |a: Int, b: Int| -> Int: a + b
+    println(add(1, 2))
+    
+    // Higher-order functions
+    let numbers = [1, 2, 3, 4, 5]
+    let doubled = numbers.map(|x| x * 2)
+    let evens = numbers.filter(|x| x % 2 == 0)
+    let sum = numbers.reduce(|a, b| a + b, 0)
+    
+    println("Sum: " + sum)
+    
+    // Decorated function
+    let result = decorated_function()
+    println("Decorated: " + result)
+    
+    return 0

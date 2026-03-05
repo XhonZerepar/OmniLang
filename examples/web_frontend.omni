@@ -1,0 +1,623 @@
+// OmniLang Full-Stack Example - Frontend (frontend.omni)
+// 
+// This file demonstrates the frontend web development capabilities of OmniLang
+// including DOM manipulation, animations, reactive state, and real-time features.
+
+module frontend;
+
+import std::web::dom::{dom, Element, selectors};
+import std::web::client::{client, Client};
+import std::web::realtime::{WebSocket, EventSource};
+import std::ui::motion::{motion, AnimationConfig, Easing};
+import std::ui::reactive::{Signal, signal, effect};
+import std::web::{Signal as UiSignal, Serialize, Deserialize};
+
+// ============== App State ==============
+
+// Reactive state for the app
+struct AppState {
+    tasks: Signal<Vec<Task>>,
+    habits: Signal<Vec<Habit>>,
+    user: Signal<User>,
+    energy: Signal<Int>,
+    loading: Signal<Bool>,
+}
+
+impl AppState {
+    fn new() -> AppState {
+        AppState {
+            tasks: signal(Vec::new()),
+            habits: signal(Vec::new()),
+            user: signal(User::default()),
+            energy: signal(75),
+            loading: signal(false),
+        }
+    }
+}
+
+// Task data
+struct Task {
+    id: Int,
+    title: String,
+    description: String,
+    completed: Bool,
+    priority: Int,
+}
+
+impl Task {
+    fn from_json(json: &str) -> Result<Task, String> {
+        // Parse JSON to Task
+        Ok(Task {
+            id: 1,
+            title: "Task".to_string(),
+            description: "".to_string(),
+            completed: false,
+            priority: 1,
+        })
+    }
+}
+
+// Habit data
+struct Habit {
+    id: Int,
+    name: String,
+    streak: Int,
+    xp: Int,
+    level: Int,
+}
+
+impl Habit {
+    fn from_json(json: &str) -> Result<Habit, String> {
+        Ok(Habit {
+            id: 1,
+            name: "Habit".to_string(),
+            streak: 0,
+            xp: 0,
+            level: 1,
+        })
+    }
+}
+
+// User data
+struct User {
+    id: Int,
+    username: String,
+    xp: Int,
+    level: Int,
+    avatar: String,
+}
+
+impl User {
+    fn default() -> User {
+        User {
+            id: 0,
+            username: "Guest".to_string(),
+            xp: 0,
+            level: 1,
+            avatar: "default".to_string(),
+        }
+    }
+}
+
+// ============== DOM Elements ==============
+
+// Get main elements
+fn get_elements() -> (Element, Element, Element) {
+    let app = dom::get("app".to_string());
+    let header = dom::get("header".to_string());
+    let content = dom::get("content".to_string());
+    (app, header, content)
+}
+
+// ============== UI Components ==============
+
+// Render task list
+fn render_tasks(tasks: &Vec<Task>, container: &Element) -> () {
+    container.set_html("");
+    
+    for task in tasks {
+        let task_elem = create_task_element(task);
+        container.append(task_elem);
+    }
+}
+
+// Create task element
+fn create_task_element(task: &Task) -> Element {
+    let elem = dom::create("div");
+    elem.set_class("task-item");
+    
+    if task.completed {
+        elem.add_class("completed");
+    }
+    
+    // Priority indicator
+    let priority_class = match task.priority {
+        3 => "priority-high",
+        4 => "priority-urgent", 
+        _ => "priority-normal",
+    };
+    elem.add_class(priority_class);
+    
+    // Task content
+    let title = dom::create("h3");
+    title.set_text(&task.title);
+    elem.append(title);
+    
+    // Checkbox
+    let checkbox = dom::create("input");
+    checkbox.set_attr("type", "checkbox");
+    if task.completed {
+        checkbox.set_attr("checked", "true");
+    }
+    checkbox.on("change", || {
+        // Handle task completion
+        complete_task(task.id);
+    });
+    elem.append(checkbox);
+    
+    elem
+}
+
+// Render habits
+fn render_habits(habits: &Vec<Habit>, container: &Element) -> () {
+    container.set_html("");
+    
+    for habit in habits {
+        let habit_elem = create_habit_element(habit);
+        container.append(habit_elem);
+    }
+}
+
+// Create habit element with streak visualization
+fn create_habit_element(habit: &Habit) -> Element {
+    let elem = dom::create("div");
+    elem.set_class("habit-item");
+    
+    // Streak fire icon (shows when streak > 0)
+    if habit.streak > 0 {
+        elem.add_class("streak-active");
+    }
+    
+    // Progress bar for level
+    let progress = create_progress_bar(habit.xp % 100, 100);
+    elem.append(progress);
+    
+    // Level badge
+    let level_badge = dom::create("span");
+    level_badge.set_class("level-badge");
+    level_badge.set_text(format!("Lv. {}", habit.level));
+    elem.append(level_badge);
+    
+    elem
+}
+
+// Create progress bar with animation
+fn create_progress_bar(current: Int, max: Int) -> Element {
+    let container = dom::create("div");
+    container.set_class("progress-bar");
+    
+    let fill = dom::create("div");
+    fill.set_class("progress-fill");
+    fill.set_style("width", format!("{}%", (current as Float / max as Float) * 100.0));
+    
+    // Animate the progress bar
+    motion::tween(&fill,
+        HashMap::from([("width".to_string(), "0%")]),
+        HashMap::from([("width".to_string(), format!("{}%", (current as Float / max as Float) * 100.0))]),
+        AnimationConfig::new()
+            .duration(500)
+            .easing(Easing::EaseOut)
+    );
+    
+    container.append(fill);
+    container
+}
+
+// Render user profile
+fn render_profile(user: &User, container: &Element) -> () {
+    container.set_html("");
+    
+    // Avatar
+    let avatar = dom::create("img");
+    avatar.set_attr("src", format!("/avatars/{}.png", user.avatar));
+    avatar.set_class("avatar");
+    container.append(avatar);
+    
+    // Username
+    let username = dom::create("h2");
+    username.set_text(&user.username);
+    container.append(username);
+    
+    // XP and Level
+    let stats = dom::create("div");
+    stats.set_class("stats");
+    stats.set_text(format!("XP: {} | Level: {}", user.xp, user.level));
+    container.append(stats);
+}
+
+// ============== Energy Bar (Your Dashboard Feature) ==============
+
+// Update energy bar with animation
+fn update_energy(state: &AppState) -> () {
+    let energy = state.energy.get();
+    let elem = dom::get("energy-bar".to_string());
+    
+    // Animate energy change
+    let current_width = elem.style("width");
+    let target_width = format!("{}%", energy);
+    
+    motion::tween(&elem,
+        HashMap::from([("width".to_string(), current_width)]),
+        HashMap::from([("width".to_string(), target_width)]),
+        AnimationConfig::new()
+            .duration(300)
+            .easing(Easing::EaseInOut)
+    );
+    
+    // Color based on energy level
+    if energy < 25 {
+        elem.set_style("background-color", "#ff4444"); // Red - low
+    } else if energy < 50 {
+        elem.set_style("background-color", "#ffaa00"); // Orange - medium
+    } else {
+        elem.set_style("background-color", "#44ff44"); // Green - high
+    }
+}
+
+// Wheel spin animation for Lizard Mode
+fn spin_wheel(state: &AppState) -> () {
+    let wheel = dom::get("lizard-wheel".to_string());
+    
+    // Random number of rotations
+    let rotations = 3 + (random_int(5) as Int);
+    
+    // Spin animation
+    motion::wheel_spin(&wheel, rotations);
+    
+    // Update energy after spin
+    let new_energy = 75 + random_int(25);
+    state.energy.set(new_energy);
+}
+
+// ============== API Functions ==============
+
+// Fetch tasks from backend
+async fn fetch_tasks() -> Result<Vec<Task>, String> {
+    let client = client::new()
+        .with_base_url("http://localhost:8080")
+        .with_auth(get_token());
+    
+    let response = await client.get("/api/tasks").send()?;
+    
+    if response.status.code == 200 {
+        let body = String::from_utf8(response.body).unwrap();
+        // Parse JSON to Vec<Task>
+        Ok(Vec::new())
+    } else {
+        Err("Failed to fetch tasks".to_string())
+    }
+}
+
+// Fetch habits
+async fn fetch_habits() -> Result<Vec<Habit>, String> {
+    let client = client::new()
+        .with_base_url("http://localhost:8080")
+        .with_auth(get_token());
+    
+    let response = await client.get("/api/habits").send()?;
+    
+    if response.status.code == 200 {
+        Ok(Vec::new())
+    } else {
+        Err("Failed to fetch habits".to_string())
+    }
+}
+
+// Complete task
+async fn complete_task(task_id: Int) -> Result<(), String> {
+    let client = client::new()
+        .with_base_url("http://localhost:8080")
+        .with_auth(get_token());
+    
+    let response = await client
+        .put(format!("/api/tasks/{}/complete", task_id))
+        .send()?;
+    
+    if response.status.code == 200 {
+        Ok(())
+    } else {
+        Err("Failed to complete task".to_string())
+    }
+}
+
+// Complete habit
+async fn complete_habit(habit_id: Int) -> Result<HabitResult, String> {
+    let client = client::new()
+        .with_base_url("http://localhost:8080")
+        .with_auth(get_token());
+    
+    let response = await client
+        .post(format!("/api/habits/{}/complete", habit_id))
+        .send()?;
+    
+    // Parse result
+    Ok(HabitResult {
+        streak: 1,
+        xp_gained: 25,
+        leveled_up: false,
+    })
+}
+
+struct HabitResult {
+    streak: Int,
+    xp_gained: Int,
+    leveled_up: Bool,
+}
+
+// Get auth token from storage
+fn get_token() -> String {
+    let storage = dom::window().local_storage();
+    storage.get("auth_token").unwrap_or("".to_string())
+}
+
+// ============== WebSocket for Real-time Updates ==============
+
+// Connect to real-time updates
+fn connect_realtime(state: &AppState) -> () {
+    // Connect to WebSocket
+    let ws = WebSocket::connect("ws://localhost:8080/ws")
+        .on_message(|data: String| {
+            // Handle real-time updates
+            handle_realtime_update(&data, state);
+        })
+        .on_error(|error: String| {
+            println("WebSocket error: " + error);
+        });
+}
+
+// Handle real-time updates
+fn handle_realtime_update(data: &str, state: &AppState) -> () {
+    // Parse update type
+    // Update state accordingly
+}
+
+// Connect to Server-Sent Events for notifications
+fn connect_sse(state: &AppState) -> () {
+    let es = EventSource::new("http://localhost:8080/events")
+        .on_event("task_update".to_string(), |data: String| {
+            // Refresh tasks
+            refresh_tasks(state);
+        })
+        .on_event("habit_reminder".to_string(), |data: String| {
+            // Show notification
+            show_notification("Time to complete your habit!");
+        })
+        .connect();
+}
+
+// Show notification with animation
+fn show_notification(message: String) -> () {
+    let notification = dom::create("div");
+    notification.set_class("notification");
+    notification.set_text(&message);
+    
+    // Position
+    notification.set_style("position", "fixed");
+    notification.set_style("top", "20px");
+    notification.set_style("right", "20px");
+    
+    // Add to DOM
+    let body = dom::body();
+    body.append(&notification);
+    
+    // Animate in
+    motion::fade_in(&notification);
+    
+    // Auto-remove after delay
+    dom::window().set_timeout(|| {
+        motion::fade_out(&notification);
+        // Remove from DOM after animation
+    }, 3000);
+}
+
+// ============== AI Integration ==============
+
+// Use AI Oracle to create task from natural language
+async fn create_task_with_oracle(description: String) -> Result<Task, String> {
+    let client = client::new()
+        .with_base_url("http://localhost:8080")
+        .with_auth(get_token());
+    
+    let response = await client
+        .post("/api/oracle/task")
+        .json(&json::object([
+            ("description".to_string(), JSONValue::String(description))
+        ]))
+        .send()?;
+    
+    // Parse response
+    Ok(Task::from_json("{}").unwrap())
+}
+
+// ============== Event Handlers ==============
+
+// Handle add task button click
+async fn handle_add_task(state: &AppState) -> () {
+    let input = dom::get("task-input".to_string());
+    let title = input.value();
+    
+    if title.len() > 0 {
+        // Show loading
+        state.loading.set(true);
+        
+        // Create task via AI or directly
+        let task = await create_task_with_oracle(title).await;
+        
+        // Update state
+        let mut tasks = state.tasks.get().clone();
+        tasks.push(task);
+        state.tasks.set(tasks);
+        
+        // Animate new task
+        let task_elem = dom::query(".task-item:last-child").unwrap();
+        motion::fade_in(&task_elem);
+        
+        // Clear input
+        input.set_value("");
+        
+        // Hide loading
+        state.loading.set(false);
+    }
+}
+
+// Handle habit completion
+async fn handle_habit_complete(habit_id: Int, state: &AppState) -> () {
+    // Show spinner animation
+    let spinner = dom::get("spinner".to_string());
+    motion::spin(&spinner, 360);
+    
+    // Complete habit
+    let result = await complete_habit(habit_id).await;
+    
+    // Animate success
+    motion::bounce(&spinner);
+    
+    // Update state
+    if result.leveled_up {
+        // Show level up animation
+        show_level_up(state.user.get().level + 1);
+    }
+    
+    // Refresh habits
+    let habits = await fetch_habits().await.unwrap();
+    state.habits.set(habits);
+}
+
+// Show level up notification
+fn show_level_up(new_level: Int) -> () {
+    let modal = dom::create("div");
+    modal.set_class("modal level-up-modal");
+    modal.set_html(format!("
+        <h2>Level Up!</h2>
+        <p>You reached Level {}</p>
+        <div class='celebration'></div>
+    ", new_level));
+    
+    // Animate in
+    modal.set_style("opacity", "0");
+    dom::body().append(&modal);
+    
+    motion::tween(&modal,
+        HashMap::from([("opacity".to_string(), "0")]),
+        HashMap::from([("opacity".to_string(), "1")]),
+        AnimationConfig::new().duration(300)
+    );
+    
+    // Spin celebration
+    let celebration = dom::query(".celebration").unwrap();
+    motion::spin(&celebration, 720);
+}
+
+// ============== Initialization ==============
+
+// Initialize the app
+fn init() -> () {
+    // Create app state
+    let state = AppState::new();
+    
+    // Set up reactive effects
+    effect(|| {
+        // Update UI when tasks change
+        let tasks = state.tasks.get();
+        let container = dom::get("tasks-container".to_string());
+        render_tasks(tasks, &container);
+    });
+    
+    effect(|| {
+        // Update UI when habits change
+        let habits = state.habits.get();
+        let container = dom::get("habits-container".to_string());
+        render_habits(habits, &container);
+    });
+    
+    effect(|| {
+        // Update energy bar when energy changes
+        update_energy(&state);
+    });
+    
+    effect(|| {
+        // Update profile when user changes
+        let user = state.user.get();
+        let container = dom::get("profile-container".to_string());
+        render_profile(user, &container);
+    });
+    
+    // Set up event listeners
+    let add_button = dom::get("add-task-button".to_string());
+    add_button.on("click", || {
+        handle_add_task(&state);
+    });
+    
+    // Connect real-time
+    connect_realtime(&state);
+    connect_sse(&state);
+    
+    // Initial data fetch
+    let _ = async fn() {
+        state.loading.set(true);
+        
+        let tasks = await fetch_tasks().unwrap_or(Vec::new());
+        state.tasks.set(tasks);
+        
+        let habits = await fetch_habits().unwrap_or(Vec::new());
+        state.habits.set(habits);
+        
+        state.loading.set(false);
+    };
+    
+    // Initialize animations
+    std::ui::init_animations();
+    
+    println("App initialized!");
+}
+
+// Simple random function
+fn random_int(max: Int) -> Int {
+    // Simplified random
+    42 % max
+}
+
+// HashMap helper for motion
+struct HashMap<K, V> {
+    // Simplified
+}
+
+impl HashMap<String, String> {
+    fn from(pairs: [(String, String); _]) -> HashMap<String, String> {
+        HashMap {}
+    }
+}
+
+// JSON helpers
+mod json {
+    use std::collections::HashMap;
+    use std::web::JSONValue;
+    
+    pub fn object(fields: [(String, JSONValue); _]) -> JSONValue {
+        let mut map = HashMap::new();
+        JSONValue::Object(map)
+    }
+}
+
+// Main entry point
+fn main(args: [String]) -> Int {
+    println("=== OmniLang Frontend ===");
+    
+    // Wait for DOM to be ready
+    // In WASM, we'd use on_load
+    
+    // Initialize app
+    init();
+    
+    0
+}

@@ -1,0 +1,45 @@
+// Concurrency in OmniLang
+// Demonstrates async/await and channels
+
+// Simple async function
+async fn fetch_data(url: String) -> String:
+    // Simulate network request
+    await sleep(100)
+    return "Data from " + url
+
+async fn process_requests() -> Int:
+    // Concurrent tasks
+    let task1 = fetch_data("https://api.example.com/users")
+    let task2 = fetch_data("https://api.example.com/posts")
+    let task3 = fetch_data("https://api.example.com/comments")
+    
+    // Wait for all tasks
+    let results = await join(task1, task2, task3)
+    
+    for result in results:
+        println(result)
+    
+    return results.len()
+
+fn main(args: [String]) -> Int:
+    // Run async function
+    let result = process_requests()
+    
+    println("Processed " + result + " requests")
+    
+    // Channel example
+    let channel = Channel.new(Int)
+    
+    // Producer
+    for i in 0..10:
+        channel.send(i)
+    
+    // Consumer
+    let sum = 0
+    for _ in 0..10:
+        let value = channel.receive()
+        sum = sum + value
+    
+    println("Sum: " + sum)
+    
+    return 0

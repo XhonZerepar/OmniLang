@@ -1,0 +1,386 @@
+// OmniLang Testing Framework
+// Built-in testing support for OmniLang projects
+
+module std::test
+
+// Test result
+pub enum TestResult:
+    Passed
+    Failed
+    Skipped
+
+// Test case
+pub struct TestCase:
+    name: String
+    function: Fn() -> ()
+    tags: [String]
+
+// Test suite
+pub struct TestSuite:
+    name: String
+    cases: [TestCase]
+    before_each: Option<Fn() -> ()>
+    after_each: Option<Fn() -> ()>
+
+impl TestSuite:
+    pub fn new(name: String) -> TestSuite:
+        return TestSuite {
+            name: name,
+            cases: [],
+            before_each: Option::None,
+            after_each: Option::None
+        }
+    
+    pub fn add_case(&mut self, name: String, func: Fn() -> ()):
+        self.cases.push(TestCase {
+            name: name,
+            function: func,
+            tags: []
+        })
+    
+    pub fn before_each(&mut self, func: Fn() -> ()):
+        self.before_each = Option::Some(func)
+    
+    pub fn after_each(&mut self, func: Fn() -> ()):
+        self.after_each = Option::Some(func)
+    
+    pub fn run(&self) -> TestResult:
+        var passed = 0
+        var failed = 0
+        var skipped = 0
+        
+        println("Running test suite: " + self.name)
+        println("----------------------------------------")
+        
+        for case in self.cases:
+            print("  " + case.name + " ... ")
+            
+            // Run before_each if set
+            match self.before_each:
+                Some(before) => before()
+                None => ()
+            
+            // Run test
+            let result = run_test_case(case)
+            
+            // Run after_each if set
+            match self.after_each:
+                Some(after) => after()
+                None => ()
+            
+            match result:
+                TestResult::Passed => 
+                    println("\033[92mPASS\033[0m")
+                    passed = passed + 1
+                TestResult::Failed => 
+                    println("\033[91mFAIL\033[0m")
+                    failed = failed + 1
+                TestResult::Skipped => 
+                    println("\033[93mSKIP\033[0m")
+                    skipped = skipped + 1
+        
+        println("----------------------------------------")
+        println("Results: " + passed.to_string() + " passed, " + 
+                failed.to_string() + " failed, " + skipped.to_string() + " skipped")
+        
+        if failed > 0:
+            return TestResult::Failed
+        return TestResult::Passed
+
+fn run_test_case(case: TestCase) -> TestResult:
+    // Catch panics and errors
+    let result = native_run_test(case.function)
+    return result
+
+// Assertion functions
+pub fn assert(condition: Bool, message: String):
+    if not condition:
+        panic("Assertion failed: " + message)
+
+pub fn assert_true(actual: Bool):
+    if not actual:
+        panic("Expected true but got false")
+
+pub fn assert_false(actual: Bool):
+    if actual:
+        panic("Expected false but got true")
+
+pub fn assert_eq<T>(expected: T, actual: T) where T: Eq:
+    if expected != actual:
+        panic("Expected " + expected.to_string() + " but got " + actual.to_string())
+
+pub fn assert_ne<T>(expected: T, actual: T) where T: Eq:
+    if expected == actual:
+        panic("Expected values to be different but both were " + expected.to_string())
+
+pub fn assert_null<T>(value: Option<T>):
+    match value:
+        Some(_) => panic("Expected null but got a value")
+        None => ()
+
+pub fn assert_not_null<T>(value: Option<T>):
+    match value:
+        Some(_) => ()
+        None => panic("Expected a value but got null")
+
+pub fn assert_empty<T>(collection: [T]):
+    if collection.len() > 0:
+        panic("Expected empty collection but got " + collection.len().to_string() + " elements")
+
+pub fn assert_not_empty<T>(collection: [T]):
+    if collection.len() == 0:
+        panic("Expected non-empty collection but got empty")
+
+pub fn assert_contains<T>(collection: [T], item: T) where T: Eq:
+    if not collection.contains(item):
+        panic("Collection does not contain expected item: " + item.to_string())
+
+pub fn assert_not_contains<T>(collection: [T], item: T) where T: Eq:
+    if collection.contains(item):
+        panic("Collection should not contain item: " + item.to_string())
+
+pub fn assert_starts_with(s: String, prefix: String):
+    if not s.starts_with(prefix):
+        panic("String does not start with '" + prefix + "': " + s)
+
+pub fn assert_ends_with(s: String, suffix: String):
+    if not s.ends_with(suffix):
+        panic("String does not end with '" + suffix + "': " + s)
+
+pub fn assert_matches(s: String, pattern: String):
+    if not regex_matches(s, pattern):
+        panic("String does not match pattern '" + pattern + "': " + s)
+
+pub fn assert_throws(func: Fn() -> ()):
+    let threw = false
+    try:
+        func()
+    catch:
+        threw = true
+    
+    if not threw:
+        panic("Expected function to throw but it did not")
+
+pub fn assert_does_not_throw(func: Fn() -> ()):
+    try:
+        func()
+    catch e:
+        panic("Function threw unexpected error: " + e.to_string())
+
+// Test configuration
+pub struct TestConfig:
+    verbose: Bool
+    show_output: Bool
+    fail_fast: Bool
+    filter: Option<String>
+    tags: [String]
+
+impl TestConfig:
+    pub fn new() -> TestConfig:
+        return TestConfig {
+            verbose: false,
+            show_output: false,
+            fail_fast: false,
+            filter: Option::None,
+            tags: []
+        }
+    
+    pub fn with_verbose(&mut self) -> TestConfig:
+        self.verbose = true
+        return self
+    
+    pub fn with_show_output(&mut self) -> TestConfig:
+        self.show_output = true
+        return self
+    
+    pub fn with_fail_fast(&mut self) -> TestConfig:
+        self.fail_fast = true
+        return self
+    
+    pub fn with_filter(&mut self, filter: String) -> TestConfig:
+        self.filter = Option::Some(filter)
+        return self
+    
+    pub fn with_tags(&mut self, tags: [String]) -> TestConfig:
+        self.tags = tags
+        return self
+
+// Test runner
+pub struct TestRunner:
+    config: TestConfig
+    suites: [TestSuite]
+    passed: Int
+    failed: Int
+    skipped: Int
+
+impl TestRunner:
+    pub fn new() -> TestRunner:
+        return TestRunner {
+            config: TestConfig::new(),
+            suites: [],
+            passed: 0,
+            failed: 0,
+            skipped: 0
+        }
+    
+    pub fn with_config(&mut self, config: TestConfig) -> TestRunner:
+        self.config = config
+        return self
+    
+    pub fn add_suite(&mut self, suite: TestSuite):
+        self.suites.push(suite)
+    
+    pub fn run(&mut self) -> TestResult:
+        println("OmniLang Test Runner")
+        println("===================")
+        println("")
+        
+        for suite in self.suites:
+            // Filter by name if set
+            match self.config.filter:
+                Some(filter) => 
+                    if not suite.name.contains(filter):
+                        continue
+                None => ()
+            
+            let result = suite.run()
+            
+            match result:
+                TestResult::Passed => self.passed = self.passed + 1
+                TestResult::Failed => 
+                    self.failed = self.failed + 1
+                    if self.config.fail_fast:
+                        break
+                TestResult::Skipped => self.skipped = self.skipped + 1
+        
+        println("")
+        println("===================")
+        println("Total: " + self.passed.to_string() + " passed, " + 
+                self.failed.to_string() + " failed, " + self.skipped.to_string() + " skipped")
+        
+        if self.failed > 0:
+            return TestResult::Failed
+        return TestResult::Passed
+    
+    pub fn print_summary(&self):
+        println("")
+        println("Test Summary")
+        println("------------")
+        println("Passed:  " + self.passed.to_string())
+        println("Failed:  " + self.failed.to_string())
+        println("Skipped: " + self.skipped.to_string())
+
+// Benchmark support
+pub struct Benchmark:
+    name: String
+    iterations: Int
+    warmup: Int
+
+impl Benchmark:
+    pub fn new(name: String) -> Benchmark:
+        return Benchmark {
+            name: name,
+            iterations: 1000,
+            warmup: 10
+        }
+    
+    pub fn with_iterations(&mut self, n: Int) -> Benchmark:
+        self.iterations = n
+        return self
+    
+    pub fn with_warmup(&mut self, n: Int) -> Benchmark:
+        self.warmup = n
+        return self
+    
+    pub fn run<T>(&self, func: Fn() -> T) -> BenchmarkResult:
+        // Warmup
+        for _ in 0..self.warmup:
+            func()
+        
+        // Actual benchmark
+        let start = std::time::now()
+        
+        for _ in 0..self.iterations:
+            func()
+        
+        let end = std::time::now()
+        let elapsed = end - start
+        
+        return BenchmarkResult {
+            name: self.name,
+            iterations: self.iterations,
+            total_time_ns: elapsed,
+            avg_time_ns: elapsed / self.iterations as Int64
+        }
+
+pub struct BenchmarkResult:
+    name: String
+    iterations: Int
+    total_time_ns: Int64
+    avg_time_ns: Int64
+
+impl BenchmarkResult:
+    pub fn print(&self):
+        let avg_us = self.avg_time_ns as Float / 1000.0
+        let total_ms = self.total_time_ns as Float / 1000000.0
+        
+        println("Benchmark: " + self.name)
+        println("  Iterations: " + self.iterations.to_string())
+        println("  Total time: " + total_ms.to_string() + " ms")
+        println("  Avg time:   " + avg_us.to_string() + " μs")
+
+// Property-based testing helpers
+pub fn for_all<T>(generator: Fn() -> T, property: Fn(T) -> Bool, examples: Int) -> Bool:
+    for _ in 0..examples:
+        let value = generator()
+        if not property(value):
+            return false
+    return true
+
+pub fn such_that<T>(generator: Fn() -> T, predicate: Fn(T) -> Bool) -> Fn() -> T:
+    return || 
+        var value = generator()
+        while not predicate(value):
+            value = generator()
+        return value
+
+// Fuzzing support
+pub fn fuzz<T>(func: Fn(T) -> (), generator: Fn() -> T, iterations: Int):
+    for _ in 0..iterations:
+        let input = generator()
+        try:
+            func(input)
+        catch:
+            // Continue on panic
+            ()
+
+// Test fixtures
+pub struct Fixture<T>:
+    setup: Fn() -> T
+    teardown: Fn(T) -> ()
+    value: Option<T>
+
+impl<T> Fixture<T>:
+    pub fn new(setup: Fn() -> T, teardown: Fn(T) -> ()) -> Fixture<T>:
+        return Fixture {
+            setup: setup,
+            teardown: teardown,
+            value: Option::None
+        }
+    
+    pub fn setup(&mut self) -> T:
+        let v = self.setup()
+        self.value = Option::Some(v)
+        return v
+    
+    pub fn teardown(&mut self):
+        match self.value:
+            Some(v) => 
+                self.teardown(v)
+                self.value = Option::None
+            None => ()
+
+    pub fn use(&self) -> T:
+        match self.value:
+            Some(v) => return v
+            None => panic("Fixture not initialized")

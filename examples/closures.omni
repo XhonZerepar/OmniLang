@@ -1,0 +1,160 @@
+// Example: Closures and Higher-Order Functions
+// Demonstrates lambda expressions, closures, and functional programming
+
+// Higher-order function that takes a function as argument
+fn apply<T, U>(value: T, f: Fn(T) -> U) -> U {
+    return f(value);
+}
+
+// Higher-order function that returns a function
+fn make_adder(n: Int) -> Fn(Int) -> Int {
+    return fn(x: Int) -> Int {
+        return x + n;
+    };
+}
+
+// Higher-order function that takes two functions
+fn compose<A, B, C>(f: Fn(A) -> B, g: Fn(B) -> C) -> Fn(A) -> C {
+    return fn(x: A) -> C {
+        return g(f(x));
+    };
+}
+
+// Function that takes a predicate
+fn filter<T>(items: Vec<T>, predicate: Fn(&T) -> Bool) -> Vec<T> {
+    let result = Vec::new();
+    for item in items.iter() {
+        if predicate(item) {
+            result.push(*item);
+        }
+    }
+    return result;
+}
+
+// Function that transforms each element
+fn map<T, U>(items: Vec<T>, f: Fn(T) -> U) -> Vec<U> {
+    let result = Vec::new();
+    for item in items {
+        result.push(f(item));
+    }
+    return result;
+}
+
+// Function that accumulates a value
+fn fold<T, Acc>(items: Vec<T>, initial: Acc, f: Fn(Acc, T) -> Acc) -> Acc {
+    let acc = initial;
+    for item in items {
+        acc = f(acc, item);
+    }
+    return acc;
+}
+
+// Function that finds an element matching a predicate
+fn find<T>(items: Vec<T>, predicate: Fn(&T) -> Bool) -> Option<T> {
+    for item in items.iter() {
+        if predicate(item) {
+            return Option::Some(*item);
+        }
+    }
+    return Option::None;
+}
+
+// Curried function example
+fn add(a: Int) -> Fn(Int) -> Int {
+    return fn(b: Int) -> Int {
+        return a + b;
+    };
+}
+
+// Closure that captures environment
+fn make_multiplier(factor: Int) -> Fn(Int) -> Int {
+    // This closure captures 'factor' from the environment
+    return fn(x: Int) -> Int {
+        return x * factor;
+    };
+}
+
+// Closure that mutates captured variable
+fn make_counter() -> Fn() -> Int {
+    let count = mut 0;
+    return fn() -> Int {
+        count += 1;
+        return count;
+    };
+}
+
+// Function returning a closure that captures multiple variables
+fn make_adder_subtracter(add: Int, subtract: Int) -> (Fn(Int) -> Int, Fn(Int) -> Int) {
+    let adder = fn(x: Int) -> Int {
+        return x + add;
+    };
+    let subtracter = fn(x: Int) -> Int {
+        return x - subtract;
+    };
+    return (adder, subtracter);
+}
+
+// Main function
+fn main(args: [String]) -> Int {
+    println("=== Closures & Higher-Order Functions Demo ===");
+
+    // Test apply
+    let doubled = apply(5, fn(x: Int) -> Int { return x * 2; });
+    println("apply(5, double) = " + doubled);
+
+    // Test make_adder
+    let add_10 = make_adder(10);
+    println("add_10(5) = " + add_10(5));
+
+    // Test compose
+    let double_then_add_10 = compose(
+        fn(x: Int) -> Int { return x * 2; },
+        fn(x: Int) -> Int { return x + 10; }
+    );
+    println("compose(double, add_10)(3) = " + double_then_add_10(3));
+
+    // Test filter
+    let numbers = Vec::new();
+    numbers.push(1);
+    numbers.push(2);
+    numbers.push(3);
+    numbers.push(4);
+    numbers.push(5);
+    
+    let evens = filter(numbers, fn(x: &Int) -> Bool { return *x % 2 == 0; });
+    println("Evens: " + evens.len());
+
+    // Test map
+    let squared = map([1, 2, 3, 4, 5], fn(x: Int) -> Int { return x * x; });
+    println("Squared: " + squared);
+
+    // Test fold
+    let sum = fold([1, 2, 3, 4, 5], 0, fn(acc: Int, x: Int) -> Int { return acc + x; });
+    println("Sum: " + sum);
+
+    // Test find
+    let found = find([1, 2, 3, 4, 5], fn(x: &Int) -> Bool { return *x > 3; });
+    println("Found: " + found.unwrap());
+
+    // Test currying
+    let add_5 = add(5);
+    println("add_5(3) = " + add_5(3));
+
+    // Test closure with captured variable
+    let times_3 = make_multiplier(3);
+    println("times_3(4) = " + times_3(4));
+
+    // Test counter closure
+    let counter = make_counter();
+    println("Counter: " + counter());
+    println("Counter: " + counter());
+    println("Counter: " + counter());
+
+    // Test multiple captures
+    let (adder, subtracter) = make_adder_subtracter(10, 5);
+    println("adder(20) = " + adder(20));
+    println("subtracter(20) = " + subtracter(20));
+
+    println("=== Demo Complete ===");
+    return 0;
+}

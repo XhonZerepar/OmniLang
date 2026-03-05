@@ -1,0 +1,6 @@
+// Hello World in OmniLang
+// The ultimate programming language
+
+fn main() -> Int:
+    println("Hello, World")
+    return 0

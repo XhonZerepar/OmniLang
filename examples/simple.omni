@@ -1,0 +1,40 @@
+# Simple Todo App in OmniLang v2.0
+
+model Todo {
+    id: int
+    title: string
+    done: bool
+}
+
+store Todos {
+    fn get_all() {
+        return db.query("SELECT * FROM Todo")
+    }
+    
+    fn create(title: string) {
+        return db.insert("Todo", { title: title, done: false })
+    }
+}
+
+route GET /api/todos {
+    fn handler() {
+        return todos.get_all()
+    }
+}
+
+route POST /api/todos {
+    fn handler() {
+        return { ok: true }
+    }
+}
+
+view App {
+    state items = []
+    
+    render {
+        div {
+            h1 "Todo App"
+            p "Full-stack in one file!"
+        }
+    }
+}

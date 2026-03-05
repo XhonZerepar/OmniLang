@@ -1,0 +1,47 @@
+# OmniLang Ecosystem Package
+
+[package]
+name = "omni-ecosystem"
+version = "0.3.0"
+description = "OmniLang Ecosystem - CLI, Standard Library, Tools, and Templates"
+authors = ["OmniLang Community"]
+license = "MIT"
+repository = "https://github.com/XhonZerepar/OmniLang"
+homepage = "https://omnilang.dev"
+
+[dependencies]
+omnilang = ">=0.2.0"
+
+[dev-dependencies]
+
+[build]
+
+[toolchain]
+channel = "stable"
+
+[lib]
+path = "stdlib/std"
+
+[[bin]]
+name = "omni"
+path = "../omni"
+
+[[example]]
+name = "basic-web"
+path = "examples/web.omni"
+
+[[example]]
+name = "library"
+path = "examples/lib.omni"
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[profile.dev]
+opt-level = 0
+
+[workspace]
+members = []
+
+[patch.crates-io]

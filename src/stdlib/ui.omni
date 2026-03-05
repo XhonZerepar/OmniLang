@@ -1,0 +1,559 @@
+//! OmniLang Standard Library - UI/Motion Module
+//! 
+//! Provides animation, motion, and reactive UI primitives for creating smooth user interfaces.
+
+module std::ui;
+
+import std::web::dom::{Element, dom};
+
+/// Motion library for declarative animations
+pub mod motion {
+    use super::*;
+    
+    /// Animation configuration
+    pub struct AnimationConfig {
+        pub duration: Int,      // milliseconds
+        pub easing: Easing,
+        pub delay: Int,         // milliseconds
+        pub iterations: Int,    // -1 for infinite
+        pub direction: Direction,
+        pub fill: FillMode,
+    }
+    
+    impl AnimationConfig {
+        /// Create a new animation config
+        pub fn new() -> AnimationConfig {
+            AnimationConfig {
+                duration: 300,
+                easing: Easing::Ease,
+                delay: 0,
+                iterations: 1,
+                direction: Direction::Normal,
+                fill: FillMode::None,
+            }
+        }
+        
+        /// Set duration
+        pub fn duration(mut self, ms: Int) -> AnimationConfig {
+            self.duration = ms;
+            self
+        }
+        
+        /// Set easing
+        pub fn easing(mut self, easing: Easing) -> AnimationConfig {
+            self.easing = easing;
+            self
+        }
+        
+        /// Set delay
+        pub fn delay(mut self, ms: Int) -> AnimationConfig {
+            self.delay = ms;
+            self
+        }
+        
+        /// Set iterations
+        pub fn iterations(mut self, count: Int) -> AnimationConfig {
+            self.iterations = count;
+            self
+        }
+        
+        /// Set direction
+        pub fn direction(mut self, dir: Direction) -> AnimationConfig {
+            self.direction = dir;
+            self
+        }
+        
+        /// Set fill mode
+        pub fn fill(mut self, fill: FillMode) -> AnimationConfig {
+            self.fill = fill;
+            self
+        }
+        
+        /// Convert to CSS string
+        pub fn to_css(&self) -> String {
+            let mut css = String::new();
+            css = css + "duration: " + &self.duration.to_string() + "ms; ";
+            css = css + "animation-timing-function: " + &self.easing.to_string() + "; ";
+            css = css + "animation-delay: " + &self.delay.to_string() + "ms; ";
+            css = css + "animation-iteration-count: " + &self.iterations.to_string() + "; ";
+            css = css + "animation-direction: " + &self.direction.to_string() + "; ";
+            css = css + "animation-fill-mode: " + &self.fill.to_string() + "; ";
+            css
+        }
+    }
+    
+    /// Easing functions
+    pub enum Easing {
+        Ease,
+        EaseIn,
+        EaseOut,
+        EaseInOut,
+        Linear,
+        CubicBezier(f64, f64, f64, f64),
+        Spring,
+    }
+    
+    impl Easing {
+        fn to_string(&self) -> String {
+            match self {
+                Easing::Ease => "ease".to_string(),
+                Easing::EaseIn => "ease-in".to_string(),
+                Easing::EaseOut => "ease-out".to_string(),
+                Easing::EaseInOut => "ease-in-out".to_string(),
+                Easing::Linear => "linear".to_string(),
+                Easing::CubicBezier(a, b, c, d) => format!("cubic-bezier({}, {}, {}, {})", a, b, c, d),
+                Easing::Spring => "cubic-bezier(0.68, -0.55, 0.265, 1.55)".to_string(),
+            }
+        }
+    }
+    
+    /// Animation direction
+    pub enum Direction {
+        Normal,
+        Reverse,
+        Alternate,
+        AlternateReverse,
+    }
+    
+    impl Direction {
+        fn to_string(&self) -> String {
+            match self {
+                Direction::Normal => "normal".to_string(),
+                Direction::Reverse => "reverse".to_string(),
+                Direction::Alternate => "alternate".to_string(),
+                Direction::AlternateReverse => "alternate-reverse".to_string(),
+            }
+        }
+    }
+    
+    /// Fill mode
+    pub enum FillMode {
+        None,
+        Forwards,
+        Backwards,
+        Both,
+    }
+    
+    impl FillMode {
+        fn to_string(&self) -> String {
+            match self {
+                FillMode::None => "none".to_string(),
+                FillMode::Forwards => "forwards".to_string(),
+                FillMode::Backwards => "backwards".to_string(),
+                FillMode::Both => "both".to_string(),
+            }
+        }
+    }
+    
+    /// Tween animation between values
+    pub fn tween(
+        elem: &Element,
+        from: HashMap<String, String>,
+        to: HashMap<String, String>,
+        config: AnimationConfig,
+    ) -> () {
+        // Implementation creates CSS transition
+        // or uses Web Animations API
+    }
+    
+    /// Fade in element
+    pub fn fade_in(elem: &Element) -> () {
+        elem.set_style("opacity", "0");
+        tween(elem, 
+            HashMap::from([("opacity".to_string(), "0".to_string())]),
+            HashMap::from([("opacity".to_string(), "1".to_string())]),
+            AnimationConfig::new().duration(300)
+        );
+    }
+    
+    /// Fade out element
+    pub fn fade_out(elem: &Element) -> () {
+        tween(elem,
+            HashMap::from([("opacity".to_string(), "1".to_string())]),
+            HashMap::from([("opacity".to_string(), "0".to_string())]),
+            AnimationConfig::new().duration(300)
+        );
+    }
+    
+    /// Slide in from direction
+    pub fn slide_in(elem: &Element, from: SlideDirection) -> () {
+        let (from_prop, to_prop) = match from {
+            SlideDirection::Left => (("-100%", "0%"), ("0%", "0%")),
+            SlideDirection::Right => (("100%", "0%"), ("0%", "0%")),
+            SlideDirection::Up => (("0%", "-100%"), ("0%", "0%")),
+            SlideDirection::Down => (("0%", "100%"), ("0%", "0%")),
+        };
+        
+        elem.set_style("opacity", "0");
+        match from {
+            SlideDirection::Left | SlideDirection::Right => {
+                elem.set_style("transform", format!("translateX({})", from_prop));
+                tween(elem,
+                    HashMap::from([
+                        ("opacity".to_string(), "1".to_string()),
+                        ("transform".to_string(), format!("translateX({})", from_prop)),
+                    ]),
+                    HashMap::from([
+                        ("opacity".to_string(), "1".to_string()),
+                        ("transform".to_string(), format!("translateX({})", to_prop)),
+                    ]),
+                    AnimationConfig::new().duration(300)
+                );
+            }
+            SlideDirection::Up | SlideDirection::Down => {
+                elem.set_style("transform", format!("translateY({})", from_prop));
+                tween(elem,
+                    HashMap::from([
+                        ("opacity".to_string(), "1".to_string()),
+                        ("transform".to_string(), format!("translateY({})", from_prop)),
+                    ]),
+                    HashMap::from([
+                        ("opacity".to_string(), "1".to_string()),
+                        ("transform".to_string(), format!("translateY({})", to_prop)),
+                    ]),
+                    AnimationConfig::new().duration(300)
+                );
+            }
+        }
+    }
+    
+    /// Slide direction
+    pub enum SlideDirection {
+        Left,
+        Right,
+        Up,
+        Down,
+    }
+    
+    /// Scale animation
+    pub fn scale(elem: &Element, to: f64) -> () {
+        tween(elem,
+            HashMap::from([("transform".to_string(), "scale(1)".to_string())]),
+            HashMap::from([("transform".to_string(), format!("scale({})", to))]),
+            AnimationConfig::new().duration(200)
+        );
+    }
+    
+    /// Bounce animation
+    pub fn bounce(elem: &Element) -> () {
+        elem.set_style("animation", "bounce 0.5s ease");
+    }
+    
+    /// Shake animation
+    pub fn shake(elem: &Element) -> () {
+        elem.set_style("animation", "shake 0.5s ease");
+    }
+    
+    /// Spin animation
+    pub fn spin(elem: &Element, degrees: Int) -> () {
+        tween(elem,
+            HashMap::from([("transform".to_string(), "rotate(0deg)".to_string())]),
+            HashMap::from([("transform".to_string(), format!("rotate({}deg)", degrees))]),
+            AnimationConfig::new().duration(500)
+        );
+    }
+    
+    /// Progress bar animation
+    pub fn progress_bar(elem: &Element, from_percent: Int, to_percent: Int) -> () {
+        elem.set_style("width", format!("{}%", from_percent));
+        tween(elem,
+            HashMap::from([("width".to_string(), format!("{}%", from_percent))]),
+            HashMap::from([("width".to_string(), format!("{}%", to_percent))]),
+            AnimationConfig::new().duration(500).easing(Easing::EaseOut)
+        );
+    }
+    
+    /// Wheel spin animation (for your Lizard Mode)
+    pub fn wheel_spin(elem: &Element, rotations: Int) -> () {
+        let degrees = rotations * 360;
+        tween(elem,
+            HashMap::from([("transform".to_string(), "rotate(0deg)".to_string())]),
+            HashMap::from([("transform".to_string(), format!("rotate({}deg)", degrees))]),
+            AnimationConfig::new()
+                .duration(2000)
+                .easing(Easing::CubicBezier(0.25, 0.1, 0.25, 1.0))
+                .fill(FillMode::Forwards)
+        );
+    }
+    
+    /// Alert fade animation
+    pub fn alert_fade(elem: &Element, show: Bool) -> () {
+        if show {
+            fade_in(elem);
+        } else {
+            fade_out(elem);
+        }
+    }
+}
+
+/// Reactive state management with signals
+pub mod reactive {
+    use super::*;
+    use std::web::*;
+    
+    /// Signal for reactive state
+    pub struct Signal<T> {
+        value: T,
+        listeners: Vec<fn(&T) -> ()>,
+    }
+    
+    impl<T> Signal<T> {
+        /// Create a new signal
+        pub fn new(value: T) -> Signal<T> {
+            Signal {
+                value,
+                listeners: Vec::new(),
+            }
+        }
+        
+        /// Get current value
+        pub fn get(&self) -> &T {
+            &self.value
+        }
+        
+        /// Set value and notify listeners
+        pub fn set(&mut self, value: T) -> () {
+            self.value = value;
+            self.notify();
+        }
+        
+        /// Update value with a function
+        pub fn update<F: FnOnce(&mut T)>(&mut self, f: F) -> () {
+            f(&mut self.value);
+            self.notify();
+        }
+        
+        /// Subscribe to changes
+        pub fn subscribe(&mut self, listener: fn(&T) -> ()) -> () {
+            self.listeners.push(listener);
+        }
+        
+        /// Notify all listeners
+        fn notify(&self) -> () {
+            for listener in &self.listeners {
+                listener(&self.value);
+            }
+        }
+    }
+    
+    /// Derived signal (computed from other signals)
+    pub struct Derived<T> {
+        compute: fn() -> T,
+        dependencies: Vec<()>, // Would be signals
+    }
+    
+    impl<T> Derived<T> {
+        /// Create a derived signal
+        pub fn new(compute: fn() -> T) -> Derived<T> {
+            Derived {
+                compute,
+                dependencies: Vec::new(),
+            }
+        }
+        
+        /// Get computed value
+        pub fn get(&self) -> T {
+            (self.compute)()
+        }
+    }
+    
+    /// Effect for side effects
+    pub struct Effect {
+        callback: fn() -> (),
+        cleanup: Option<fn() -> ()>,
+    }
+    
+    impl Effect {
+        /// Create a new effect
+        pub fn new(callback: fn() -> ()) -> Effect {
+            Effect {
+                callback,
+                cleanup: None,
+            }
+        }
+        
+        /// Run the effect
+        pub fn run(&self) -> () {
+            (self.callback)();
+        }
+        
+        /// Set cleanup function
+        pub fn cleanup(mut self, cleanup: fn() -> ()) -> Effect {
+            self.cleanup = Some(cleanup);
+            self
+        }
+    }
+    
+    /// Create a signal
+    pub fn signal<T>(value: T) -> Signal<T> {
+        Signal::new(value)
+    }
+    
+    /// Create a derived signal
+    pub fn derived<T>(compute: fn() -> T) -> Derived<T> {
+        Derived::new(compute)
+    }
+    
+    /// Create an effect
+    pub fn effect(callback: fn() -> ()) -> Effect {
+        Effect::new(callback)
+    }
+}
+
+/// Transitions for route/page transitions
+pub mod transitions {
+    /// Page transition types
+    pub enum Transition {
+        Fade,
+        SlideLeft,
+        SlideRight,
+        SlideUp,
+        SlideDown,
+        Zoom,
+        Flip,
+    }
+    
+    /// Apply transition to element
+    pub fn apply(elem: &Element, transition: Transition) -> () {
+        let class = match transition {
+            Transition::Fade => "transition-fade",
+            Transition::SlideLeft => "transition-slide-left",
+            Transition::SlideRight => "transition-slide-right",
+            Transition::SlideUp => "transition-slide-up",
+            Transition::SlideDown => "transition-slide-down",
+            Transition::Zoom => "transition-zoom",
+            Transition::Flip => "transition-flip",
+        };
+        elem.add_class(class);
+    }
+}
+
+/// Scroll animations
+pub mod scroll {
+    /// Scroll animation types
+    pub enum ScrollAnimation {
+        Smooth,
+        Auto,
+    }
+    
+    /// Scroll to element
+    pub fn scroll_to_elem(elem: &Element) -> () {
+        elem.scroll_into_view();
+    }
+    
+    /// Scroll to position
+    pub fn scroll_to_position(x: Int, y: Int) -> () {
+        std::web::dom::window().scroll_to(x, y);
+    }
+    
+    /// Scroll to top
+    pub fn scroll_to_top() -> () {
+        std::web::dom::window().scroll_to(0, 0);
+    }
+    
+    /// Scroll to bottom
+    pub fn scroll_to_bottom() -> () {
+        // Would need to get document height
+        std::web::dom::window().scroll_to(0, 10000);
+    }
+}
+
+/// Gesture support (touch/mouse)
+pub mod gestures {
+    /// Gesture types
+    pub enum Gesture {
+        Tap,
+        DoubleTap,
+        LongPress,
+        Pan,
+        Pinch,
+        SwipeLeft,
+        SwipeRight,
+        SwipeUp,
+        SwipeDown,
+    }
+    
+    /// Create gesture handler
+    pub fn on_gesture(elem: &Element, gesture: Gesture, handler: fn() -> ()) -> () {
+        // Implementation would add touch/mouse event listeners
+    }
+}
+
+/// Responsive utilities
+pub mod responsive {
+    /// Breakpoint sizes
+    pub struct Breakpoints {
+        pub mobile: Int,
+        pub tablet: Int,
+        pub desktop: Int,
+    }
+    
+    impl Breakpoints {
+        pub fn new() -> Breakpoints {
+            Breakpoints {
+                mobile: 576,
+                tablet: 768,
+                desktop: 992,
+            }
+        }
+    }
+    
+    /// Get current breakpoint
+    pub fn current_breakpoint() -> String {
+        let width = std::web::dom::window().inner_width();
+        if width < 576 {
+            "mobile".to_string()
+        } else if width < 768 {
+            "tablet".to_string()
+        } else {
+            "desktop".to_string()
+        }
+    }
+    
+    /// Check if mobile
+    pub fn is_mobile() -> Bool {
+        current_breakpoint() == "mobile"
+    }
+    
+    /// Check if tablet
+    pub fn is_tablet() -> Bool {
+        current_breakpoint() == "tablet"
+    }
+    
+    /// Check if desktop
+    pub fn is_desktop() -> Bool {
+        current_breakpoint() == "desktop"
+    }
+}
+
+/// CSS class-based animations
+pub mod css_animations {
+    /// Predefined animation classes
+    pub const ANIMATION_FADE_IN: &str = "omni-fade-in";
+    pub const ANIMATION_FADE_OUT: &str = "omni-fade-out";
+    pub const ANIMATION_SLIDE_IN_LEFT: &str = "omni-slide-in-left";
+    pub const ANIMATION_SLIDE_IN_RIGHT: &str = "omni-slide-in-right";
+    pub const ANIMATION_BOUNCE: &str = "omni-bounce";
+    pub const ANIMATION_SHAKE: &str = "omni-shake";
+    pub const ANIMATION_SPIN: &str = "omni-spin";
+    pub const ANIMATION_PULSE: &str = "omni-pulse";
+    
+    /// Add animation class
+    pub fn animate(elem: &Element, animation_class: &str) -> () {
+        elem.add_class(animation_class);
+    }
+    
+    /// Remove animation class
+    pub fn stop_animate(elem: &Element, animation_class: &str) -> () {
+        elem.remove_class(animation_class);
+    }
+}
+
+/// Inject CSS for animations (call once at app start)
+pub fn init_animations() -> () {
+    // This would inject the CSS into the document
+    // For now, just a placeholder
+}
+
+// Re-export commonly used items
+pub use reactive::*;

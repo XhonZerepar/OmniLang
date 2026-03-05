@@ -1,0 +1,9 @@
+model Todo {
+    id: int
+}
+
+store Todos {
+    fn get_all() {
+        return []
+    }
+}

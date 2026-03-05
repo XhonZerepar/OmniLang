@@ -1,0 +1,514 @@
+# ============================================================
+# OmniLang v2.0 - Real-Time Chat Application
+#
+# Single file contains:
+# - User database model
+# - Message storage
+# - WebSocket handling
+# - REST API
+# - React-like chat UI
+#
+# Compile: python omnilang2.py chat.omni
+# Run: python chat.py
+# ============================================================
+
+# ------------------------------------------------------------
+# MODELS - Database schema
+# ------------------------------------------------------------
+
+model User {
+    id: int [pk, auto]
+    username: string [unique]
+    avatar: string
+    online: bool
+    created_at: int
+}
+
+model Message {
+    id: int [pk, auto]
+    user_id: int
+    content: string
+    created_at: int
+}
+
+# ------------------------------------------------------------
+# STORE - Business logic
+# ------------------------------------------------------------
+
+store Chat {
+    fn get_messages(limit: int = 50) {
+        sql = """
+            SELECT m.*, u.username, u.avatar 
+            FROM Message m 
+            JOIN User u ON m.user_id = u.id 
+            ORDER BY m.created_at DESC 
+            LIMIT ?
+        """
+        return db.query(sql, limit)
+    }
+    
+    fn send_message(user_id: int, content: string) {
+        if not content.trim():
+            return null
+            
+        message = {
+            user_id: user_id,
+            content: content,
+            created_at: now()
+        }
+        id = db.insert("Message", message)
+        
+        # Get user info
+        user = db.query("SELECT username, avatar FROM User WHERE id = ?", user_id)[0]
+        
+        return { 
+            id: id, 
+            ...message, 
+            username: user.username, 
+            avatar: user.avatar 
+        }
+    }
+    
+    fn get_online_users() {
+        return db.query("SELECT * FROM User WHERE online = 1")
+    }
+    
+    fn set_online(user_id: int, online: bool) {
+        db.update("User", { online: online }, "id = ?", user_id)
+    }
+    
+    fn create_user(username: string) {
+        # Generate avatar
+        avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" + username
+        
+        user = {
+            username: username,
+            avatar: avatar,
+            online: true,
+            created_at: now()
+        }
+        
+        id = db.insert("User", user)
+        return { id: id, ...user }
+    }
+}
+
+# ------------------------------------------------------------
+# API ROUTES
+# ------------------------------------------------------------
+
+route GET /api/messages {
+    fn handler(request) {
+        limit = int(request.limit or 50)
+        messages = chat.get_messages(limit)
+        return messages.reverse()
+    }
+}
+
+route POST /api/messages {
+    fn handler(request) {
+        user_id = int(request.user_id or 1)
+        content = request.content
+        
+        message = chat.send_message(user_id, content)
+        
+        # Broadcast to all via websocket
+        if message:
+            broadcast({
+                type: "message",
+                data: message
+            })
+        
+        return message
+    }
+}
+
+route GET /api/users {
+    fn handler() {
+        return chat.get_online_users()
+    }
+}
+
+route POST /api/login {
+    fn handler(request) {
+        username = request.username
+        
+        # Check if user exists
+        users = db.query("SELECT * FROM User WHERE username = ?", username)
+        
+        if users:
+            chat.set_online(users[0].id, true)
+            return users[0]
+        
+        # Create new user
+        return chat.create_user(username)
+    }
+}
+
+route POST /api/logout {
+    fn handler(request) {
+        user_id = int(request.user_id)
+        chat.set_online(user_id, false)
+        return { success: true }
+    }
+}
+
+# ------------------------------------------------------------
+# WEBSOCKET - Real-time communication
+# ------------------------------------------------------------
+
+websocket on_message {
+    # Handle incoming websocket messages
+    data = parse_json(message)
+    
+    if data.type == "message":
+        # Save and broadcast
+        msg = chat.send_message(data.user_id, data.content)
+        if msg:
+            broadcast({
+                type: "message",
+                data: msg
+            })
+    
+    elif data.type == "typing":
+        # Broadcast typing indicator
+        broadcast({
+            type: "typing",
+            user_id: data.user_id,
+            username: data.username
+        })
+}
+
+# ------------------------------------------------------------
+# FRONTEND - Chat UI
+# ------------------------------------------------------------
+
+view App {
+    state messages = []
+    state users = []
+    state username = ""
+    state user_id = 0
+    state message = ""
+    state typing_users = []
+    state connected = false
+    
+    render {
+        div(class="chat-app") {
+            # Login screen
+            if not user_id {
+                div(class="login-screen") {
+                    h1 "OmniLang Chat"
+                    p "Real-time messaging in one file!"
+                    
+                    input(
+                        type="text",
+                        placeholder="Enter your username...",
+                        value=username,
+                        onkeypress={ 
+                            if event.key == "Enter":
+                                login() 
+                        }
+                    )
+                    button(onclick={ login() }) "Join Chat"
+                }
+            }
+            
+            # Chat screen
+            else {
+                div(class="chat-container") {
+                    # Sidebar
+                    div(class="sidebar") {
+                        h3 "Online"
+                        span(class="user-count") users.length + " users"
+                        
+                        ul(class="user-list") {
+                            users.map(u => {
+                                li {
+                                    img(src=u.avatar, class="avatar")
+                                    span u.username
+                                }
+                            })
+                        }
+                    }
+                    
+                    # Main chat
+                    div(class="main-chat") {
+                        div(class="messages") {
+                            messages.map(m => {
+                                div(class={"message": true, "own": m.user_id == user_id}) {
+                                    if m.user_id != user_id {
+                                        img(src=m.avatar, class="avatar")
+                                    }
+                                    div(class="bubble") {
+                                        if m.user_id != user_id {
+                                            span(class="username") m.username
+                                        }
+                                        span m.content
+                                    }
+                                }
+                            })
+                        }
+                        
+                        # Typing indicator
+                        if typing_users.length > 0 {
+                            div(class="typing") {
+                                typing_users.map(u => u.username + " is typing...").join(", ")
+                            }
+                        }
+                        
+                        # Input
+                        div(class="input-area") {
+                            input(
+                                type="text",
+                                placeholder="Type a message...",
+                                value=message,
+                                oninput={
+                                    message = event.target.value
+                                    # Send typing indicator
+                                },
+                                onkeypress={
+                                    if event.key == "Enter":
+                                        send_message()
+                                }
+                            )
+                            button(onclick={ send_message() }) "Send"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# ------------------------------------------------------------
+# CLIENT-SIDE LOGIC
+# ------------------------------------------------------------
+
+fn login() {
+    if not username.trim():
+        return
+    
+    # Login
+    result = fetch("/api/login", {
+        method: "POST",
+        body: JSON.stringify({ username: username })
+    })
+    
+    user_id = result.id
+    
+    # Load data
+    load_messages()
+    load_users()
+    
+    # Connect websocket (simulated with polling for simplicity)
+    connected = true
+}
+
+fn load_messages() {
+    messages = fetch("/api/messages?limit=100")
+}
+
+fn load_users() {
+    users = fetch("/api/users")
+}
+
+fn send_message() {
+    if not message.trim():
+        return
+    
+    fetch("/api/messages", {
+        method: "POST",
+        body: JSON.stringify({
+            user_id: user_id,
+            content: message
+        })
+    })
+    
+    message = ""
+    load_messages()
+}
+
+# ------------------------------------------------------------
+# STYLES
+# ------------------------------------------------------------
+
+style App {
+    * {
+        box-sizing: border-box
+    }
+    
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
+        margin: 0
+        background: #1a1a2e
+        color: #eee
+    }
+    
+    .chat-app {
+        height: 100vh
+        display: flex
+    }
+    
+    .login-screen {
+        width: 100%
+        display: flex
+        flex-direction: column
+        align-items: center
+        justify-content: center
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)
+    }
+    
+    .login-screen h1 {
+        font-size: 48px
+        margin-bottom: 10px
+    }
+    
+    .login-screen p {
+        color: rgba(255,255,255,0.8)
+        margin-bottom: 40px
+    }
+    
+    .login-screen input {
+        padding: 15px 20px
+        font-size: 18px
+        border: none
+        border-radius: 30px
+        width: 300px
+        margin-right: 10px
+    }
+    
+    .login-screen button {
+        padding: 15px 30px
+        font-size: 18px
+        background: #fff
+        color: #667eea
+        border: none
+        border-radius: 30px
+        cursor: pointer
+        font-weight: bold
+    }
+    
+    .chat-container {
+        display: flex
+        width: 100%
+    }
+    
+    .sidebar {
+        width: 250px
+        background: #16213e
+        padding: 20px
+        border-right: 1px solid #0f3460
+    }
+    
+    .sidebar h3 {
+        margin: 0 0 10px 0
+        color: #667eea
+    }
+    
+    .user-count {
+        color: #666
+        font-size: 14px
+    }
+    
+    .user-list {
+        list-style: none
+        padding: 0
+        margin-top: 20px
+    }
+    
+    .user-list li {
+        display: flex
+        align-items: center
+        padding: 10px 0
+    }
+    
+    .user-list .avatar {
+        width: 32px
+        height: 32px
+        border-radius: 50%
+        margin-right: 10px
+    }
+    
+    .main-chat {
+        flex: 1
+        display: flex
+        flex-direction: column
+    }
+    
+    .messages {
+        flex: 1
+        padding: 20px
+        overflow-y: auto
+    }
+    
+    .message {
+        display: flex
+        margin-bottom: 15px
+    }
+    
+    .message.own {
+        flex-direction: row-reverse
+    }
+    
+    .message .avatar {
+        width: 36px
+        height: 36px
+        border-radius: 50%
+        margin: 0 10px
+    }
+    
+    .message .bubble {
+        background: #16213e
+        padding: 12px 16px
+        border-radius: 18px
+        max-width: 400px
+    }
+    
+    .message.own .bubble {
+        background: #667eea
+    }
+    
+    .message .username {
+        display: block
+        font-size: 12px
+        color: #667eea
+        margin-bottom: 4px
+    }
+    
+    .message.own .username {
+        display: none
+    }
+    
+    .typing {
+        padding: 10px 20px
+        color: #666
+        font-style: italic
+    }
+    
+    .input-area {
+        padding: 20px
+        background: #16213e
+        display: flex
+        gap: 10px
+    }
+    
+    .input-area input {
+        flex: 1
+        padding: 15px 20px
+        border: none
+        border-radius: 30px
+        background: #0f3460
+        color: #fff
+        font-size: 16px
+    }
+    
+    .input-area button {
+        padding: 15px 30px
+        background: #667eea
+        color: white
+        border: none
+        border-radius: 30px
+        cursor: pointer
+        font-weight: bold
+    }
+}

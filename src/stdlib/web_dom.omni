@@ -1,0 +1,575 @@
+//! OmniLang Standard Library - DOM Module
+//! 
+//! Provides DOM manipulation and reactive UI primitives for WASM frontend development.
+//! This module only works when compiled to WebAssembly.
+
+module std::web::dom;
+
+import std::web::{Signal, Effect};
+
+/// DOM Element representation
+pub struct Element {
+    id: String,
+}
+
+/// Element selector utilities
+pub mod selectors {
+    /// Query selector results
+    pub struct QueryResult {
+        elements: Vec<Element>,
+    }
+    
+    impl QueryResult {
+        /// Get the first element
+        pub fn first(&self) -> Option<&Element> {
+            self.elements.first()
+        }
+        
+        /// Get all elements
+        pub fn all(&self) -> &Vec<Element> {
+            &self.elements
+        }
+        
+        /// Get element at index
+        pub fn get(&self, index: Int) -> Option<&Element> {
+            self.elements.get(index)
+        }
+        
+        /// Get the number of elements
+        pub fn len(&self) -> Int {
+            self.elements.len()
+        }
+        
+        /// Check if any elements found
+        pub fn is_empty(&self) -> Bool {
+            self.elements.is_empty()
+        }
+    }
+}
+
+/// DOM manipulation functions
+pub mod dom {
+    /// Get element by ID
+    pub fn get(id: String) -> Element {
+        // Implementation: calls JS function document.getElementById(id)
+        Element { id }
+    }
+    
+    /// Query selector - returns first match
+    pub fn query(selector: String) -> Option<Element> {
+        // Implementation: calls JS function document.querySelector(selector)
+        None
+    }
+    
+    /// Query selector - returns all matches
+    pub fn query_all(selector: String) -> selectors::QueryResult {
+        // Implementation: calls JS function document.querySelectorAll(selector)
+        selectors::QueryResult { elements: Vec::new() }
+    }
+    
+    /// Create a new element
+    pub fn create(tag: String) -> Element {
+        // Implementation: calls JS function document.createElement(tag)
+        Element { id: "".to_string() }
+    }
+    
+    /// Get body element
+    pub fn body() -> Element {
+        // Implementation: returns document.body
+        Element { id: "body".to_string() }
+    }
+    
+    /// Get window object
+    pub fn window() -> Window {
+        // Implementation: returns window object
+        Window { }
+    }
+    
+    /// Get document object
+    pub fn document() -> Document {
+        // Implementation: returns document object
+        Document { }
+    }
+    
+    /// Add event listener
+    pub fn on(event: String, selector: String, handler: fn()) -> () {
+        // Implementation: calls addEventListener on matched elements
+    }
+    
+    /// Remove event listener
+    pub fn off(event: String, selector: String, handler: fn()) -> () {
+        // Implementation: calls removeEventListener
+    }
+    
+    /// Get current URL
+    pub fn location() -> Location {
+        // Implementation: returns window.location
+        Location { }
+    }
+    
+    /// Navigate to URL
+    pub fn navigate(url: String) -> () {
+        // Implementation: window.location.href = url
+    }
+    
+    /// Reload page
+    pub fn reload() -> () {
+        // Implementation: window.location.reload()
+    }
+    
+    /// Get cookies
+    pub fn cookies() -> String {
+        // Implementation: document.cookie
+        "".to_string()
+    }
+    
+    /// Set cookie
+    pub fn set_cookie(name: String, value: String) -> () {
+        // Implementation: document.cookie = name + "=" + value
+    }
+}
+
+/// Window object
+pub struct Window { }
+
+impl Window {
+    /// Get inner width
+    pub fn inner_width() -> Int {
+        // Implementation: window.innerWidth
+        0
+    }
+    
+    /// Get inner height
+    pub fn inner_height() -> Int {
+        // Implementation: window.innerHeight
+        0
+    }
+    
+    /// Get outer width
+    pub fn outer_width() -> Int {
+        // Implementation: window.outerWidth
+        0
+    }
+    
+    /// Get outer height
+    pub fn outer_height() -> Int {
+        // Implementation: window.outerHeight
+        0
+    }
+    
+    /// Scroll to position
+    pub fn scroll_to(x: Int, y: Int) -> () {
+        // Implementation: window.scrollTo(x, y)
+    }
+    
+    /// Set timeout
+    pub fn set_timeout(callback: fn(), ms: Int) -> Int {
+        // Implementation: window.setTimeout
+        0
+    }
+    
+    /// Set interval
+    pub fn set_interval(callback: fn(), ms: Int) -> Int {
+        // Implementation: window.setInterval
+        0
+    }
+    
+    /// Clear timeout
+    pub fn clear_timeout(id: Int) -> () {
+        // Implementation: window.clearTimeout
+    }
+    
+    /// Clear interval
+    pub fn clear_interval(id: Int) -> () {
+        // Implementation: window.clearInterval
+    }
+    
+    /// Get local storage
+    pub fn local_storage() -> Storage {
+        // Implementation: window.localStorage
+        Storage { }
+    }
+    
+    /// Get session storage
+    pub fn session_storage() -> Storage {
+        // Implementation: window.sessionStorage
+        Storage { }
+    }
+    
+    /// Alert dialog
+    pub fn alert(message: String) -> () {
+        // Implementation: window.alert
+    }
+    
+    /// Confirm dialog
+    pub fn confirm(message: String) -> Bool {
+        // Implementation: window.confirm
+        false
+    }
+    
+    /// Prompt dialog
+    pub fn prompt(message: String) -> Option<String> {
+        // Implementation: window.prompt
+        None
+    }
+}
+
+/// Document object
+pub struct Document { }
+
+impl Document {
+    /// Get title
+    pub fn title() -> String {
+        // Implementation: document.title
+        "".to_string()
+    }
+    
+    /// Set title
+    pub fn set_title(title: String) -> () {
+        // Implementation: document.title = title
+    }
+    
+    /// Get ready state
+    pub fn ready_state() -> String {
+        // Implementation: document.readyState
+        "loading".to_string()
+    }
+    
+    /// Get URL
+    pub fn url() -> String {
+        // Implementation: document.URL
+        "".to_string()
+    }
+    
+    /// Get domain
+    pub fn domain() -> String {
+        // Implementation: document.domain
+        "".to_string()
+    }
+}
+
+/// Location object
+pub struct Location { }
+
+impl Location {
+    /// Get href
+    pub fn href() -> String {
+        // Implementation: window.location.href
+        "".to_string()
+    }
+    
+    /// Set href (navigate)
+    pub fn set_href(url: String) -> () {
+        // Implementation: window.location.href = url
+    }
+    
+    /// Get pathname
+    pub fn pathname() -> String {
+        // Implementation: window.location.pathname
+        "".to_string()
+    }
+    
+    /// Get search (query string)
+    pub fn search() -> String {
+        // Implementation: window.location.search
+        "".to_string()
+    }
+    
+    /// Get hash
+    pub fn hash() -> String {
+        // Implementation: window.location.hash
+        "".to_string()
+    }
+    
+    /// Reload
+    pub fn reload() -> () {
+        // Implementation: window.location.reload()
+    }
+}
+
+/// Storage (localStorage/sessionStorage)
+pub struct Storage { }
+
+impl Storage {
+    /// Get item
+    pub fn get(key: String) -> Option<String> {
+        // Implementation: storage.getItem(key)
+        None
+    }
+    
+    /// Set item
+    pub fn set(key: String, value: String) -> () {
+        // Implementation: storage.setItem(key, value)
+    }
+    
+    /// Remove item
+    pub fn remove(key: String) -> () {
+        // Implementation: storage.removeItem(key)
+    }
+    
+    /// Clear all
+    pub fn clear() -> () {
+        // Implementation: storage.clear()
+    }
+    
+    /// Get number of items
+    pub fn len() -> Int {
+        // Implementation: storage.length
+        0
+    }
+    
+    /// Get key at index
+    pub fn key(index: Int) -> Option<String> {
+        // Implementation: storage.key(index)
+        None
+    }
+}
+
+/// Element methods
+impl Element {
+    /// Get element ID
+    pub fn id(&self) -> String {
+        // Implementation: element.id
+        self.id.clone()
+    }
+    
+    /// Set element ID
+    pub fn set_id(&mut self, id: String) -> () {
+        // Implementation: element.id = id
+        self.id = id;
+    }
+    
+    /// Get tag name
+    pub fn tag_name(&self) -> String {
+        // Implementation: element.tagName
+        "".to_string()
+    }
+    
+    /// Get text content
+    pub fn text(&self) -> String {
+        // Implementation: element.textContent
+        "".to_string()
+    }
+    
+    /// Set text content
+    pub fn set_text(&self, text: String) -> () {
+        // Implementation: element.textContent = text
+    }
+    
+    /// Get inner HTML
+    pub fn html(&self) -> String {
+        // Implementation: element.innerHTML
+        "".to_string()
+    }
+    
+    /// Set inner HTML
+    pub fn set_html(&self, html: String) -> () {
+        // Implementation: element.innerHTML = html
+    }
+    
+    /// Get outer HTML
+    pub fn outer_html(&self) -> String {
+        // Implementation: element.outerHTML
+        "".to_string()
+    }
+    
+    /// Get/Set CSS class
+    pub fn class(&self) -> String {
+        // Implementation: element.className
+        "".to_string()
+    }
+    
+    /// Set CSS class
+    pub fn set_class(&self, class: String) -> () {
+        // Implementation: element.className = class
+    }
+    
+    /// Add CSS class
+    pub fn add_class(&self, class: String) -> () {
+        // Implementation: element.classList.add(class)
+    }
+    
+    /// Remove CSS class
+    pub fn remove_class(&self, class: String) -> () {
+        // Implementation: element.classList.remove(class)
+    }
+    
+    /// Toggle CSS class
+    pub fn toggle_class(&self, class: String) -> () {
+        // Implementation: element.classList.toggle(class)
+    }
+    
+    /// Check has CSS class
+    pub fn has_class(&self, class: String) -> Bool {
+        // Implementation: element.classList.contains(class)
+        false
+    }
+    
+    /// Get attribute
+    pub fn attr(&self, name: String) -> Option<String> {
+        // Implementation: element.getAttribute(name)
+        None
+    }
+    
+    /// Set attribute
+    pub fn set_attr(&self, name: String, value: String) -> () {
+        // Implementation: element.setAttribute(name, value)
+    }
+    
+    /// Remove attribute
+    pub fn remove_attr(&self, name: String) -> () {
+        // Implementation: element.removeAttribute(name)
+    }
+    
+    /// Check has attribute
+    pub fn has_attr(&self, name: String) -> Bool {
+        // Implementation: element.hasAttribute(name)
+        false
+    }
+    
+    /// Get style
+    pub fn style(&self, property: String) -> String {
+        // Implementation: element.style[property]
+        "".to_string()
+    }
+    
+    /// Set style
+    pub fn set_style(&self, property: String, value: String) -> () {
+        // Implementation: element.style[property] = value
+    }
+    
+    /// Set multiple styles
+    pub fn set_styles(&self, styles: HashMap<String, String>) -> () {
+        // Implementation: Object.assign(element.style, styles)
+        for (prop, value) in styles {
+            self.set_style(prop, value);
+        }
+    }
+    
+    /// Get parent element
+    pub fn parent(&self) -> Option<Element> {
+        // Implementation: element.parentElement
+        None
+    }
+    
+    /// Get children
+    pub fn children(&self) -> Vec<Element> {
+        // Implementation: element.children
+        Vec::new()
+    }
+    
+    /// Get first child
+    pub fn first_child(&self) -> Option<Element> {
+        // Implementation: element.firstElementChild
+        None
+    }
+    
+    /// Get last child
+    pub fn last_child(&self) -> Option<Element> {
+        // Implementation: element.lastElementChild
+        None
+    }
+    
+    /// Get previous sibling
+    pub fn prev_sibling(&self) -> Option<Element> {
+        // Implementation: element.previousElementSibling
+        None
+    }
+    
+    /// Get next sibling
+    pub fn next_sibling(&self) -> Option<Element> {
+        // Implementation: element.nextElementSibling
+        None
+    }
+    
+    /// Append child
+    pub fn append(&self, child: Element) -> () {
+        // Implementation: element.appendChild(child)
+    }
+    
+    /// Remove child
+    pub fn remove_child(&self, child: Element) -> () {
+        // Implementation: element.removeChild(child)
+    }
+    
+    /// Insert before
+    pub fn insert_before(&self, new_node: Element, reference_node: Element) -> () {
+        // Implementation: element.insertBefore(newNode, referenceNode)
+    }
+    
+    /// Replace child
+    pub fn replace_child(&self, new_node: Element, old_node: Element) -> () {
+        // Implementation: element.replaceChild(newNode, oldNode)
+    }
+    
+    /// Clone element
+    pub fn clone(&self) -> Element {
+        // Implementation: element.cloneNode(true)
+        Element { id: "".to_string() }
+    }
+    
+    /// Check if element contains other
+    pub fn contains(&self, other: &Element) -> Bool {
+        // Implementation: element.contains(other)
+        false
+    }
+    
+    /// Get computed style
+    pub fn computed_style(&self, property: String) -> String {
+        // Implementation: getComputedStyle(element)[property]
+        "".to_string()
+    }
+    
+    /// Get element position
+    pub fn offset(&self) -> Offset {
+        // Implementation: { top: element.offsetTop, left: element.offsetLeft }
+        Offset { top: 0, left: 0 }
+    }
+    
+    /// Get element dimensions
+    pub fn dimensions(&self) -> Dimensions {
+        // Implementation: { width: element.offsetWidth, height: element.offsetHeight }
+        Dimensions { width: 0, height: 0 }
+    }
+    
+    /// Focus element
+    pub fn focus(&self) -> () {
+        // Implementation: element.focus()
+    }
+    
+    /// Blur element
+    pub fn blur(&self) -> () {
+        // Implementation: element.blur()
+    }
+    
+    /// Click element
+    pub fn click(&self) -> () {
+        // Implementation: element.click()
+    }
+    
+    /// Scroll into view
+    pub fn scroll_into_view(&self) -> () {
+        // Implementation: element.scrollIntoView()
+    }
+    
+    /// Get dataset (data-* attributes)
+    pub fn dataset(&self) -> HashMap<String, String> {
+        // Implementation: element.dataset
+        HashMap::new()
+    }
+}
+
+/// Offset position
+pub struct Offset {
+    pub top: Int,
+    pub left: Int,
+}
+
+/// Dimensions
+pub struct Dimensions {
+    pub width: Int,
+    pub height: Int,
+}
+
+// Re-export for convenience
+pub use selectors::*;

@@ -1,0 +1,56 @@
+{
+  "name": "omnilang",
+  "displayName": "OmniLang",
+  "description": "OmniLang language support for VS Code",
+  "version": "0.2.0",
+  "publisher": "omnilang",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "omnilang",
+        "aliases": ["OmniLang", "omni"],
+        "extensions": [".omni"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "omnilang",
+        "scopeName": "source.omnilang",
+        "path": "./syntaxes/omnilang.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "OmniLang Configuration",
+      "properties": {
+        "omnilang.serverPath": {
+          "type": "string",
+          "default": "omlsp",
+          "description": "Path to the OmniLang language server"
+        },
+        "omnilang.trace.server": {
+          "type": "string",
+          "default": "off",
+          "enum": ["off", "messages", "verbose"],
+          "description": "Traces the communication between VS Code and the language server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "esbuild ./extension.js --bundle --outdir=out --platform=node --external:vscode",
+    "compile": "esbuild ./extension.js --bundle --outdir=out --platform=node --external:vscode",
+    "watch": "esbuild ./extension.js --bundle --outdir=out --platform=node --external:vscode --watch"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "esbuild": "^0.19.0"
+  }
+}

@@ -1,0 +1,347 @@
+// OmniLang Full-Stack Example - Backend (server.omni)
+// 
+// This file demonstrates the backend web development capabilities of OmniLang
+// including HTTP server, routing, database, and authentication.
+
+module backend;
+
+import std::web::server::{server, Server, Router, Response};
+import std::web::{Request, Response as WebResponse, HttpStatus, Serialize, Deserialize};
+import std::db::{Database, Store};
+import std::auth::{jwt, session, password};
+import std::async::{spawn, sleep, gather};
+import std::ai::oracle::{Oracle, TaskSpec};
+
+// ============== Data Models ==============
+
+/// Task model
+#[derive(Serialize, Deserialize)]
+struct Task {
+    id: Int,
+    title: String,
+    description: String,
+    completed: Bool,
+    priority: Priority,
+    due_date: Option<String>,
+    created_at: String,
+}
+
+enum Priority {
+    Low,
+    Normal,
+    High,
+    Urgent,
+}
+
+/// Habit model  
+#[derive(Serialize, Deserialize)]
+struct Habit {
+    id: Int,
+    name: String,
+    streak: Int,
+    xp: Int,
+    level: Int,
+    last_completed: Option<String>,
+}
+
+/// User model
+#[derive(Serialize, Deserialize)]
+struct User {
+    id: Int,
+    username: String,
+    email: String,
+    password_hash: String,
+    xp: Int,
+    level: Int,
+    avatar: String,
+}
+
+// ============== Database Setup ==============
+
+// Initialize database
+fn init_database() -> Result<Database, String> {
+    let db = Database::open("app.db")?;
+    
+    // Create tables
+    db.execute("CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
+        username TEXT UNIQUE,
+        email TEXT UNIQUE, 
+        password_hash TEXT,
+        xp INTEGER DEFAULT 0,
+        level INTEGER DEFAULT 1,
+        avatar TEXT DEFAULT 'default'
+    )")?;
+    
+    db.execute("CREATE TABLE IF NOT EXISTS tasks (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        title TEXT,
+        description TEXT,
+        completed INTEGER DEFAULT 0,
+        priority INTEGER DEFAULT 1,
+        due_date TEXT,
+        created_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )")?;
+    
+    db.execute("CREATE TABLE IF NOT EXISTS habits (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        name TEXT,
+        streak INTEGER DEFAULT 0,
+        xp INTEGER DEFAULT 0,
+        level INTEGER DEFAULT 1,
+        last_completed TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )")?;
+    
+    Ok(db)
+}
+
+// ============== Route Handlers ==============
+
+// Get all tasks for user
+fn get_tasks(req: Request) -> Response {
+    // Get user from JWT token
+    let token = req.headers.get("Authorization")
+        .map(|t| t.replace("Bearer ", ""));
+    
+    match token {
+        Some(t) => {
+            // Verify token and get user
+            let payload = jwt::decode(&t).unwrap();
+            let user_id = payload.sub.unwrap();
+            
+            // Query database
+            let db = Database::open("app.db").unwrap();
+            let result = db.query(
+                "SELECT id, title, description, completed, priority, due_date, created_at 
+                 FROM tasks WHERE user_id = ? ORDER BY created_at DESC"
+            );
+            
+            // Return JSON
+            Response::new()
+                .with_status(HttpStatus::ok())
+                .with_json(result)
+        }
+        None => {
+            Response::new()
+                .with_status(HttpStatus::unauthorized())
+                .with_text("No token provided")
+        }
+    }
+}
+
+// Create new task
+fn create_task(req: Request) -> Response {
+    // Parse JSON body
+    let body = String::from_utf8(req.body.clone()).unwrap();
+    let new_task: Task = Task::from_json(&body).unwrap();
+    
+    // Save to database
+    let db = Database::open("app.db").unwrap();
+    db.execute(format!(
+        "INSERT INTO tasks (user_id, title, description, priority, due_date, created_at) 
+         VALUES (1, '{}', '{}', {}, '{}', '{}')",
+        new_task.title,
+        new_task.description,
+        1, // priority as int
+        new_task.due_date.unwrap_or("".to_string()),
+        "2024-01-01"
+    )).unwrap();
+    
+    Response::new()
+        .with_status(HttpStatus::created())
+        .with_json(new_task)
+}
+
+// Complete task
+fn complete_task(req: Request) -> Response {
+    let task_id = req.query_params.get("id").unwrap();
+    
+    let db = Database::open("app.db").unwrap();
+    db.execute(format!(
+        "UPDATE tasks SET completed = 1 WHERE id = {}",
+        task_id
+    )).unwrap();
+    
+    // Award XP
+    db.execute("UPDATE users SET xp = xp + 10 WHERE id = 1").unwrap();
+    
+    Response::new()
+        .with_status(HttpStatus::ok())
+        .with_json(json::object([
+            ("success".to_string(), JSONValue::Bool(true)),
+            ("xp_gained".to_string(), JSONValue::Int(10))
+        ]))
+}
+
+// Get habits
+fn get_habits(req: Request) -> Response {
+    let db = Database::open("app.db").unwrap();
+    let result = db.query("SELECT * FROM habits WHERE user_id = 1");
+    
+    Response::new()
+        .with_status(HttpStatus::ok())
+        .with_json(result)
+}
+
+// Complete habit (streak tracking)
+fn complete_habit(req: Request) -> Response {
+    let habit_id = req.query_params.get("id").unwrap();
+    
+    let db = Database::open("app.db").unwrap();
+    
+    // Get current habit data
+    let result = db.query(format!(
+        "SELECT streak, xp, level FROM habits WHERE id = {}",
+        habit_id
+    )).unwrap();
+    
+    // Update streak and XP
+    let new_streak = 1; // Would increment
+    let new_xp = 25; // Would add
+    
+    db.execute(format!(
+        "UPDATE habits SET streak = {}, xp = xp + {}, last_completed = datetime('now') WHERE id = {}",
+        new_streak, new_xp, habit_id
+    )).unwrap();
+    
+    // Check for level up
+    let total_xp = 100; // Would query
+    
+    Response::new()
+        .with_status(HttpStatus::ok())
+        .with_json(json::object([
+            ("streak".to_string(), JSONValue::Int(new_streak)),
+            ("xp_gained".to_string(), JSONValue::Int(new_xp)),
+            ("leveled_up".to_string(), JSONValue::Bool(total_xp >= 100))
+        ])))
+}
+
+// User registration
+fn register(req: Request) -> Response {
+    let body = String::from_utf8(req.body.clone()).unwrap();
+    let user_data = json::parse::<JSONValue>(&body).unwrap();
+    
+    // Hash password
+    let password_hash = password::hash("user_data.password");
+    
+    // Save user
+    let db = Database::open("app.db").unwrap();
+    db.execute(format!(
+        "INSERT INTO users (username, email, password_hash) VALUES ('{}', '{}', '{}')",
+        "username", "email", password_hash
+    )    Response::new).unwrap();
+    
+()
+        .with_status(HttpStatus::created())
+        .with_text("User created")
+}
+
+// User login
+fn login(req: Request) -> Response {
+    let body = String::from_utf8(req.body.clone()).unwrap();
+    let credentials = json::parse::<JSONValue>(&body).unwrap();
+    
+    // Verify password
+    let password_hash = password::hash("provided_password");
+    
+    // Create JWT token
+    let token = jwt::builder()
+        .secret("secret-key")
+        .subject("user_id".to_string())
+        .expires_in(3600)
+        .claim("username".to_string(), "user".to_string())
+        .build();
+    
+    Response::new()
+        .with_status(HttpStatus::ok())
+        .with_json(json::object([
+            ("token".to_string(), JSONValue::String(token)),
+            ("user".to_string(), JSONValue::Object(HashMap::new()))
+        ]))
+}
+
+// AI Oracle - Natural language task creation
+fn oracle_task(req: Request) -> Response {
+    let body = String::from_utf8(req.body.clone()).unwrap();
+    let data = json::parse::<JSONValue>(&body).unwrap();
+    let description = data.get("description").unwrap().to_json();
+    
+    // Use AI to parse task
+    let oracle = Oracle::new();
+    let task_spec = oracle.create_task(&description).unwrap();
+    
+    // Save to database
+    let db = Database::open("app.db").unwrap();
+    db.execute(format!(
+        "INSERT INTO tasks (user_id, title, description, priority) VALUES (1, '{}', '{}', {})",
+        task_spec.title,
+        task_spec.description,
+        2 // normal priority
+    )).unwrap();
+    
+    Response::new()
+        .with_status(HttpStatus::created())
+        .with_json(json::object([
+            ("task".to_string(), JSONValue::Object(HashMap::new())),
+            ("ai_tags".to_string(), JSONValue::Array(
+                task_spec.tags.iter().map(|t| JSONValue::String(t.clone())).collect()
+            ))
+        ]))
+}
+
+// ============== Main Server ==============
+
+fn main(args: [String]) -> Int {
+    println("=== OmniLang Backend Server ===");
+    
+    // Initialize database
+    let db = init_database().expect("Failed to initialize database");
+    println("Database initialized");
+    
+    // Configure server with routes
+    let app = server()
+        // CORS middleware
+        .use(middleware::cors())
+        // Logging middleware
+        .use(middleware::logging())
+        
+        // Public routes
+        .post("/api/register", register)
+        .post("/api/login", login)
+        
+        // Protected routes (would use auth middleware)
+        .get("/api/tasks", get_tasks)
+        .post("/api/tasks", create_task)
+        .put("/api/tasks/:id/complete", complete_task)
+        
+        .get("/api/habits", get_habits)
+        .post("/api/habits/:id/complete", complete_habit)
+        
+        // AI features
+        .post("/api/oracle/task", oracle_task);
+    
+    // Start server
+    println("Starting server on http://localhost:8080");
+    // app.listen(8080);
+    
+    0
+}
+
+// ============== JSON Helpers ==============
+
+mod json {
+    use std::collections::HashMap;
+    use std::web::JSONValue;
+    
+    pub fn object(fields: [(String, JSONValue); _]) -> JSONValue {
+        let mut map = HashMap::new();
+        for (k, v) in fields {
+            map.insert(k, v);
+        }
+        JSONValue::Object(map)
+    }
+}

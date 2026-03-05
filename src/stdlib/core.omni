@@ -1,0 +1,222 @@
+//! OmniLang Standard Library - Core Types
+//! 
+//! Contains Option<T>, Result<T, E>, and other fundamental types.
+
+/// Option<T> - Represents optional values
+pub enum Option<T> {
+    None,
+    Some(T),
+}
+
+impl<T> Option<T> {
+    /// Returns true if the option is Some
+    pub fn is_some(&self) -> Bool {
+        match self {
+            Option::Some(_) => true,
+            Option::None => false,
+        }
+    }
+
+    /// Returns true if the option is None
+    pub fn is_none(&self) -> Bool {
+        match self {
+            Option::Some(_) => false,
+            Option::None => true,
+        }
+    }
+
+    /// Unwraps the Some value or panics
+    pub fn unwrap(self) -> T {
+        match self {
+            Option::Some(v) => v,
+            Option::None => throw("Called unwrap on None"),
+        }
+    }
+
+    /// Unwraps the Some value or returns a default
+    pub fn unwrap_or(self, default: T) -> T {
+        match self {
+            Option::Some(v) => v,
+            Option::None => default,
+        }
+    }
+
+    /// Unwraps the Some value or calls the fallback function
+    pub fn unwrap_or_else<F: Fn() -> T>(self, f: F) -> T {
+        match self {
+            Option::Some(v) => v,
+            Option::None => f(),
+        }
+    }
+
+    /// Maps the Option<T> to Option<U>
+    pub fn map<U>(self, f: Fn(T) -> U) -> Option<U> {
+        match self {
+            Option::Some(v) => Option::Some(f(v)),
+            Option::None => Option::None,
+        }
+    }
+
+    /// Maps the Option<T> to Option<U>, or calls the fallback
+    pub fn map_or<U>(self, default: U, f: Fn(T) -> U) -> U {
+        match self {
+            Option::Some(v) => f(v),
+            Option::None => default,
+        }
+    }
+
+    /// Returns None if the option is None, otherwise calls predicate
+    pub fn filter<P: Fn(&T) -> Bool>(self, predicate: P) -> Option<T> {
+        match self {
+            Option::Some(v) => {
+                if predicate(&v) {
+                    Option::Some(v)
+                } else {
+                    Option::None
+                }
+            }
+            Option::None => Option::None,
+        }
+    }
+
+    /// Converts from Option<Option<T>> to Option<T>
+    pub fn flatten(self) -> Option<T> {
+        match self {
+            Option::Some(Option::Some(v)) => Option::Some(v),
+            Option::Some(Option::None) => Option::None,
+            Option::None => Option::None,
+        }
+    }
+}
+
+/// Result<T, E> - Represents success (Ok) or failure (Err)
+pub enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+impl<T, E> Result<T, E> {
+    /// Returns true if the result is Ok
+    pub fn is_ok(&self) -> Bool {
+        match self {
+            Result::Ok(_) => true,
+            Result::Err(_) => false,
+        }
+    }
+
+    /// Returns true if the result is Err
+    pub fn is_err(&self) -> Bool {
+        match self {
+            Result::Ok(_) => false,
+            Result::Err(_) => true,
+        }
+    }
+
+    /// Unwraps the Ok value or panics
+    pub fn unwrap(self) -> T {
+        match self {
+            Result::Ok(v) => v,
+            Result::Err(e) => throw(format!("Called unwrap on Err: {:?}", e)),
+        }
+    }
+
+    /// Unwraps the Err value or panics
+    pub fn unwrap_err(self) -> E {
+        match self {
+            Result::Ok(v) => throw(format!("Called unwrap_err on Ok: {:?}", v)),
+            Result::Err(e) => e,
+        }
+    }
+
+    /// Unwraps the Ok value or returns a default
+    pub fn unwrap_or(self, default: T) -> T {
+        match self {
+            Result::Ok(v) => v,
+            Result::Err(_) => default,
+        }
+    }
+
+    /// Unwraps the Ok value or calls the fallback function
+    pub fn unwrap_or_else<F: Fn() -> T>(self, f: F) -> T {
+        match self {
+            Result::Ok(v) => v,
+            Result::Err(_) => f(),
+        }
+    }
+
+    /// Maps the Result<T, E> to Result<U, E>
+    pub fn map<U>(self, f: Fn(T) -> U) -> Result<U, E> {
+        match self {
+            Result::Ok(v) => Result::Ok(f(v)),
+            Result::Err(e) => Result::Err(e),
+        }
+    }
+
+    /// Maps the Result<T, E> to Result<T, F>
+    pub fn map_err<F>(self, f: Fn(E) -> F) -> Result<T, F> {
+        match self {
+            Result::Ok(v) => Result::Ok(v),
+            Result::Err(e) => Result::Err(f(e)),
+        }
+    }
+
+    /// Returns the contained Ok value, or calls the fallback with the Err
+    pub fn or_else<F: Fn(E) -> Result<T, E>>(self, op: F) -> Result<T, E> {
+        match self {
+            Result::Ok(v) => Result::Ok(v),
+            Result::Err(e) => op(e),
+        }
+    }
+
+    /// Converts from Option<T> to Result<T, E>
+    pub fn ok_or(self, err: E) -> Result<T, E> {
+        match self {
+            Result::Ok(v) => Result::Ok(v),
+            Result::Err(_) => Result::Err(err),
+        }
+    }
+}
+
+/// Panic function - throws an error
+fn throw(message: String) -> Nothing {
+    // In implementation, this would longjmp or use some error handling mechanism
+    println!("PANIC: " + message);
+    exit(1);
+}
+
+/// Exit the program
+fn exit(code: Int) -> Nothing {
+    // Foreign function to C's exit
+    extern "C" {
+        fn exit(code: Int) -> Nothing;
+    }
+    unsafe { exit(code) }
+}
+
+/// Print to stdout
+fn println(message: String) -> Void {
+    extern "C" {
+        fn printf(format: String, ...) -> Int;
+    }
+    unsafe { printf("%s\n", message) }
+}
+
+/// Print to stdout without newline
+fn print(message: String) -> Void {
+    extern "C" {
+        fn printf(format: String, ...) -> Int;
+    }
+    unsafe { printf("%s", message) }
+}
+
+/// Read a line from stdin
+fn read_line() -> String {
+    // Implementation would read from stdin
+    let mut line = String::new();
+    // ... stdin reading implementation
+    return line;
+}
+
+// Type aliases for common types
+pub type Nothing = Void;
+pub type Bool = Int;

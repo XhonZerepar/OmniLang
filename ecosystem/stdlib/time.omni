@@ -1,0 +1,534 @@
+// OmniLang Standard Library - DateTime Module
+// Provides date and time functionality
+
+module std::time
+
+// Time zone
+pub struct TimeZone:
+    name: String
+    offset_hours: Int
+
+// Date
+pub struct Date:
+    year: Int
+    month: Int  // 1-12
+    day: Int    // 1-31
+
+impl Date:
+    pub fn new(year: Int, month: Int, day: Int) -> Date:
+        return Date { year: year, month: month, day: day }
+    
+    pub fn today() -> Date:
+        return native_date_today()
+    
+    pub fn from_timestamp(ts: Int64) -> Date:
+        return native_date_from_timestamp(ts)
+    
+    pub fn year(&self) -> Int:
+        return self.year
+    
+    pub fn month(&self) -> Int:
+        return self.month
+    
+    pub fn day(&self) -> Int:
+        return self.day
+    
+    pub fn weekday(&self) -> Weekday:
+        return native_date_weekday(self.year, self.month, self.day)
+    
+    pub fn is_leap_year(&self) -> Bool:
+        if self.year % 400 == 0:
+            return true
+        if self.year % 100 == 0:
+            return false
+        return self.year % 4 == 0
+    
+    pub fn days_in_month(&self) -> Int:
+        match self.month:
+            1 => 31
+            2 => if self.is_leap_year() 29 else 28
+            3 => 31
+            4 => 30
+            5 => 31
+            6 => 30
+            7 => 31
+            8 => 31
+            9 => 30
+            10 => 31
+            11 => 30
+            12 => 31
+            _ => 0
+    
+    pub fn day_of_year(&self) -> Int:
+        var days = 0
+        for m in 1..self.month:
+            days = days + Date::new(self.year, m, 1).days_in_month()
+        return days + self.day
+    
+    pub fn add_days(&self, days: Int) -> Date:
+        let ts = self.to_timestamp()
+        return Date::from_timestamp(ts + (days as Int64) * 86400)
+    
+    pub fn sub_days(&self, days: Int) -> Date:
+        return self.add_days(-days)
+    
+    pub fn to_timestamp(&self) -> Int64:
+        return native_date_to_timestamp(self.year, self.month, self.day)
+    
+    pub fn format(&self, fmt: String) -> String:
+        return native_date_format(self, fmt)
+    
+    pub fn to_string(&self) -> String:
+        return self.format("%Y-%m-%d")
+
+// Time
+pub struct Time:
+    hour: Int    // 0-23
+    minute: Int  // 0-59
+    second: Int  // 0-59
+    nanosecond: Int  // 0-999999999
+
+impl Time:
+    pub fn new(hour: Int, minute: Int, second: Int) -> Time:
+        return Time { 
+            hour: hour, 
+            minute: minute, 
+            second: second,
+            nanosecond: 0 
+        }
+    
+    pub fn now() -> Time:
+        return native_time_now()
+    
+    pub fn from_timestamp(ts: Int64) -> Time:
+        return native_time_from_timestamp(ts)
+    
+    pub fn hour(&self) -> Int:
+        return self.hour
+    
+    pub fn minute(&self) -> Int:
+        return self.minute
+    
+    pub fn second(&self) -> Int:
+        return self.second
+    
+    pub fn nanosecond(&self) -> Int:
+        return self.nanosecond
+    
+    pub fn add_seconds(&self, seconds: Int) -> Time:
+        let ts = self.to_timestamp()
+        return Time::from_timestamp(ts + seconds as Int64)
+    
+    pub fn sub_seconds(&self, seconds: Int) -> Time:
+        return self.add_seconds(-seconds)
+    
+    pub fn to_timestamp(&self) -> Int64:
+        return (self.hour as Int64) * 3600 + 
+               (self.minute as Int64) * 60 + 
+               (self.second as Int64)
+    
+    pub fn format(&self, fmt: String) -> String:
+        return native_time_format(self, fmt)
+    
+    pub fn to_string(&self) -> String:
+        return self.format("%H:%M:%S")
+
+// DateTime
+pub struct DateTime:
+    date: Date
+    time: Time
+    timezone: Option<TimeZone>
+
+impl DateTime:
+    pub fn new(date: Date, time: Time) -> DateTime:
+        return DateTime {
+            date: date,
+            time: time,
+            timezone: Option::None
+        }
+    
+    pub fn now() -> DateTime:
+        return native_datetime_now()
+    
+    pub fn now_utc() -> DateTime:
+        return native_datetime_now_utc()
+    
+    pub fn from_timestamp(ts: Int64) -> DateTime:
+        return native_datetime_from_timestamp(ts)
+    
+    pub fn from_timestamp_utc(ts: Int64) -> DateTime:
+        return native_datetime_from_timestamp_utc(ts)
+    
+    pub fn with_timezone(&mut self, tz: TimeZone) -> DateTime:
+        self.timezone = Option::Some(tz)
+        return self
+    
+    pub fn date(&self) -> Date:
+        return self.date
+    
+    pub fn time(&self) -> Time:
+        return self.time
+    
+    pub fn timezone(&self) -> Option<TimeZone>:
+        return self.timezone
+    
+    pub fn year(&self) -> Int:
+        return self.date.year()
+    
+    pub fn month(&self) -> Int:
+        return self.date.month()
+    
+    pub fn day(&self) -> Int:
+        return self.date.day()
+    
+    pub fn hour(&self) -> Int:
+        return self.time.hour()
+    
+    pub fn minute(&self) -> Int:
+        return self.time.minute()
+    
+    pub fn second(&self) -> Int:
+        return self.time.second()
+    
+    pub fn weekday(&self) -> Weekday:
+        return self.date.weekday()
+    
+    pub fn timestamp(&self) -> Int64:
+        return native_datetime_timestamp(self)
+    
+    pub fn timestamp_millis(&self) -> Int64:
+        return self.timestamp() * 1000
+    
+    pub fn timestamp_micros(&self) -> Int64:
+        return self.timestamp() * 1000000
+    
+    pub fn add(&self, duration: Duration) -> DateTime:
+        return DateTime::from_timestamp(self.timestamp() + duration.total_seconds())
+    
+    pub fn sub(&self, duration: Duration) -> DateTime:
+        return DateTime::from_timestamp(self.timestamp() - duration.total_seconds())
+    
+    pub fn diff(&self, other: DateTime) -> Duration:
+        return Duration::seconds((self.timestamp() - other.timestamp()) as Int)
+    
+    pub fn is_utc(&self) -> Bool:
+        return self.timezone.is_none()
+    
+    pub fn is_same_day(&self, other: DateTime) -> Bool:
+        return self.date == other.date
+    
+    pub fn is_same_hour(&self, other: DateTime) -> Bool:
+        return self.date == other.date && self.time.hour() == other.time.hour()
+    
+    pub fn start_of_day(&self) -> DateTime:
+        return DateTime::new(self.date, Time::new(0, 0, 0))
+    
+    pub fn end_of_day(&self) -> DateTime:
+        return DateTime::new(self.date, Time::new(23, 59, 59))
+    
+    pub fn start_of_month(&self) -> DateTime:
+        return DateTime::new(Date::new(self.year(), self.month(), 1), Time::new(0, 0, 0))
+    
+    pub fn end_of_month(&self) -> DateTime:
+        let last_day = Date::new(self.year(), self.month(), 1).days_in_month()
+        return DateTime::new(Date::new(self.year(), self.month(), last_day), Time::new(23, 59, 59))
+    
+    pub fn format(&self, fmt: String) -> String:
+        return native_datetime_format(self, fmt)
+    
+    pub fn to_string(&self) -> String:
+        return self.format("%Y-%m-%d %H:%M:%S")
+
+// Duration
+pub struct Duration:
+    nanoseconds: Int64
+
+impl Duration:
+    pub fn nanoseconds(n: Int64) -> Duration:
+        return Duration { nanoseconds: n }
+    
+    pub fn microseconds(us: Int64) -> Duration:
+        return Duration { nanoseconds: us * 1000 }
+    
+    pub fn milliseconds(ms: Int64) -> Duration:
+        return Duration { nanoseconds: ms * 1000000 }
+    
+    pub fn seconds(s: Int64) -> Duration:
+        return Duration { nanoseconds: s * 1000000000 }
+    
+    pub fn minutes(m: Int64) -> Duration:
+        return Duration { nanoseconds: m * 60 * 1000000000 }
+    
+    pub fn hours(h: Int64) -> Duration:
+        return Duration { nanoseconds: h * 3600 * 1000000000 }
+    
+    pub fn days(d: Int64) -> Duration:
+        return Duration { nanoseconds: d * 86400 * 1000000000 }
+    
+    pub fn from_nanos(&self) -> Int64:
+        return self.nanoseconds
+    
+    pub fn from_micros(&self) -> Int64:
+        return self.nanoseconds / 1000
+    
+    pub fn from_millis(&self) -> Int64:
+        return self.nanoseconds / 1000000
+    
+    pub fn from_seconds(&self) -> Int64:
+        return self.nanoseconds / 1000000000
+    
+    pub fn from_minutes(&self) -> Int64:
+        return self.nanoseconds / (60 * 1000000000)
+    
+    pub fn from_hours(&self) -> Int64:
+        return self.nanoseconds / (3600 * 1000000000)
+    
+    pub fn from_days(&self) -> Int64:
+        return self.nanoseconds / (86400 * 1000000000)
+    
+    pub fn total_nanoseconds(&self) -> Int64:
+        return self.nanoseconds
+    
+    pub fn total_microseconds(&self) -> Int64:
+        return self.nanoseconds / 1000
+    
+    pub fn total_milliseconds(&self) -> Int64:
+        return self.nanoseconds / 1000000
+    
+    pub fn total_seconds(&self) -> Int64:
+        return self.nanoseconds / 1000000000
+    
+    pub fn as_nanos(&self) -> Int64:
+        return self.nanoseconds
+    
+    pub fn as_micros(&self) -> Float:
+        return self.nanoseconds as Float / 1000.0
+    
+    pub fn as_millis(&self) -> Float:
+        return self.nanoseconds as Float / 1000000.0
+    
+    pub fn as_seconds(&self) -> Float:
+        return self.nanoseconds as Float / 1000000000.0
+    
+    pub fn as_minutes(&self) -> Float:
+        return self.nanoseconds as Float / (60.0 * 1000000000.0)
+    
+    pub fn as_hours(&self) -> Float:
+        return self.nanoseconds as Float / (3600.0 * 1000000000.0)
+    
+    pub fn as_days(&self) -> Float:
+        return self.nanoseconds as Float / (86400.0 * 1000000000.0)
+    
+    pub fn is_zero(&self) -> Bool:
+        return self.nanoseconds == 0
+    
+    pub fn is_negative(&self) -> Bool:
+        return self.nanoseconds < 0
+    
+    pub fn abs(&self) -> Duration:
+        if self.nanoseconds < 0:
+            return Duration { nanoseconds: -self.nanoseconds }
+        return self
+    
+    pub fn add(&self, other: Duration) -> Duration:
+        return Duration { nanoseconds: self.nanoseconds + other.nanoseconds }
+    
+    pub fn sub(&self, other: Duration) -> Duration:
+        return Duration { nanoseconds: self.nanoseconds - other.nanoseconds }
+    
+    pub fn mul(&self, factor: Int64) -> Duration:
+        return Duration { nanoseconds: self.nanoseconds * factor }
+    
+    pub fn div(&self, divisor: Int64) -> Duration:
+        return Duration { nanoseconds: self.nanoseconds / divisor }
+    
+    pub fn cmp(&self, other: Duration) -> Ordering:
+        if self.nanoseconds < other.nanoseconds:
+            return Ordering::Less
+        if self.nanoseconds > other.nanoseconds:
+            return Ordering::Greater
+        return Ordering::Equal
+
+// Weekday enum
+pub enum Weekday:
+    Monday: 1
+    Tuesday: 2
+    Wednesday: 3
+    Thursday: 4
+    Friday: 5
+    Saturday: 6
+    Sunday: 7
+
+impl Weekday:
+    pub fn from_iso(iso: Int) -> Weekday:
+        match iso:
+            1 => Weekday::Monday
+            2 => Weekday::Tuesday
+            3 => Weekday::Wednesday
+            4 => Weekday::Thursday
+            5 => Weekday::Friday
+            6 => Weekday::Saturday
+            7 => Weekday::Sunday
+            _ => panic("Invalid ISO weekday")
+    
+    pub fn today() -> Weekday:
+        return Date::today().weekday()
+    
+    pub fn name(&self) -> String:
+        match self:
+            Weekday::Monday => "Monday"
+            Weekday::Tuesday => "Tuesday"
+            Weekday::Wednesday => "Wednesday"
+            Weekday::Thursday => "Thursday"
+            Weekday::Friday => "Friday"
+            Weekday::Saturday => "Saturday"
+            Weekday::Sunday => "Sunday"
+    
+    pub fn short_name(&self) -> String:
+        match self:
+            Weekday::Monday => "Mon"
+            Weekday::Tuesday => "Tue"
+            Weekday::Wednesday => "Wed"
+            Weekday::Thursday => "Thu"
+            Weekday::Friday => "Fri"
+            Weekday::Saturday => "Sat"
+            Weekday::Sunday => "Sun"
+    
+    pub fn is_weekend(&self) -> Bool:
+        return self == Weekday::Saturday || self == Weekday::Sunday
+    
+    pub fn is_weekday(&self) -> Bool:
+        return not self.is_weekend()
+
+// Month enum
+pub enum Month:
+    January: 1
+    February: 2
+    March: 3
+    April: 4
+    May: 5
+    June: 6
+    July: 7
+    August: 8
+    September: 9
+    October: 10
+    November: 11
+    December: 12
+
+impl Month:
+    pub fn from_int(m: Int) -> Month:
+        match m:
+            1 => Month::January
+            2 => Month::February
+            3 => Month::March
+            4 => Month::April
+            5 => Month::May
+            6 => Month::June
+            7 => Month::July
+            8 => Month::August
+            9 => Month::September
+            10 => Month::October
+            11 => Month::November
+            12 => Month::December
+            _ => panic("Invalid month")
+    
+    pub fn name(&self) -> String:
+        match self:
+            Month::January => "January"
+            Month::February => "February"
+            Month::March => "March"
+            Month::April => "April"
+            Month::May => "May"
+            Month::June => "June"
+            Month::July => "July"
+            Month::August => "August"
+            Month::September => "September"
+            Month::October => "October"
+            Month::November => "November"
+            Month::December => "December"
+    
+    pub fn short_name(&self) -> String:
+        match self:
+            Month::January => "Jan"
+            Month::February => "Feb"
+            Month::March => "Mar"
+            Month::April => "Apr"
+            Month::May => "May"
+            Month::June => "Jun"
+            Month::July => "Jul"
+            Month::August => "Aug"
+            Month::September => "Sep"
+            Month::October => "Oct"
+            Month::November => "Nov"
+            Month::December => "Dec"
+
+// Stopwatch for timing
+pub struct Stopwatch:
+    start_time: DateTime
+    running: Bool
+
+impl Stopwatch:
+    pub fn start() -> Stopwatch:
+        return Stopwatch {
+            start_time: DateTime::now(),
+            running: true
+        }
+    
+    pub fn elapsed(&self) -> Duration:
+        if self.running:
+            let now = DateTime::now()
+            return now.diff(self.start_time)
+        return Duration::seconds(0)
+    
+    pub fn stop(&mut self) -> Duration:
+        self.running = false
+        return self.elapsed()
+    
+    pub fn reset(&mut self):
+        self.start_time = DateTime::now()
+        self.running = true
+    
+    pub fn is_running(&self) -> Bool:
+        return self.running
+
+// Sleep functions
+pub fn sleep(duration: Duration):
+    native_sleep(duration.total_nanoseconds())
+
+pub fn sleep_seconds(seconds: Int64):
+    sleep(Duration::seconds(seconds))
+
+pub fn sleep_milliseconds(ms: Int64):
+    sleep(Duration::milliseconds(ms))
+
+pub fn sleep_microseconds(us: Int64):
+    sleep(Duration::microseconds(us))
+
+// Timer
+pub struct Timer:
+    duration: Duration
+    callback: Option<Fn() -> ()>
+    running: Bool
+
+impl Timer:
+    pub fn new(duration: Duration) -> Timer:
+        return Timer {
+            duration: duration,
+            callback: Option::None,
+            running: false
+        }
+    
+    pub fn with_callback(&mut self, callback: Fn() -> ()) -> Timer:
+        self.callback = Option::Some(callback)
+        return self
+    
+    pub fn start(&mut self):
+        self.running = true
+        native_timer_start(self.duration.total_nanoseconds(), self.callback)
+    
+    pub fn stop(&mut self):
+        self.running = false
+        native_timer_stop()
+    
+    pub fn is_running(&self) -> Bool:
+        return self.running

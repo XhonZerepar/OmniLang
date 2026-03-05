@@ -1,0 +1,458 @@
+// OmniLang Documentation Generator
+// Generates HTML documentation from OmniLang source files
+
+module std::doc
+
+// Documentation node types
+pub enum DocNodeType:
+    Module
+    Struct
+    Class
+    Function
+    Method
+    Field
+    Property
+    Enum
+    EnumVariant
+    Trait
+    Impl
+    Constant
+    Type
+
+// Documentation node
+pub struct DocNode:
+    node_type: DocNodeType
+    name: String
+    full_name: String
+    description: String
+    params: [DocParam]
+    return_type: Option<String>
+    examples: [String]
+    notes: [String]
+    warnings: [String]
+    children: [DocNode]
+    source_file: String
+    source_line: Int
+
+// Function/Method parameter
+pub struct DocParam:
+    name: String
+    type_name: String
+    description: String
+    optional: Bool
+    default_value: Option<String>
+
+// Documentation configuration
+pub struct DocConfig:
+    title: String
+    description: String
+    version: String
+    output_dir: String
+    theme: String
+    include_private: Bool
+    include_examples: Bool
+    generate_index: Bool
+    source_link: Bool
+
+impl DocConfig:
+    pub fn new() -> DocConfig:
+        return DocConfig {
+            title: "OmniLang Documentation".to_string(),
+            description: "".to_string(),
+            version: "0.1.0".to_string(),
+            output_dir: "target/docs".to_string(),
+            theme: "default".to_string(),
+            include_private: false,
+            include_examples: true,
+            generate_index: true,
+            source_link: true
+        }
+    
+    pub fn with_title(&mut self, title: String) -> DocConfig:
+        self.title = title
+        return self
+    
+    pub fn with_description(&mut self, desc: String) -> DocConfig:
+        self.description = desc
+        return self
+    
+    pub fn with_version(&mut self, version: String) -> DocConfig:
+        self.version = version
+        return self
+    
+    pub fn with_output_dir(&mut self, dir: String) -> DocConfig:
+        self.output_dir = dir
+        return self
+    
+    pub fn with_theme(&mut self, theme: String) -> DocConfig:
+        self.theme = theme
+        return self
+
+// Documentation generator
+pub struct Generator:
+    config: DocConfig
+    nodes: [DocNode]
+    index: HashMap<String, DocNode>
+
+impl Generator:
+    pub fn new(config: DocConfig) -> Generator:
+        return Generator {
+            config: config,
+            nodes: [],
+            index: HashMap::new()
+        }
+    
+    pub fn add_node(&mut self, node: DocNode):
+        self.nodes.push(node)
+        self.index.set(node.full_name, node)
+    
+    pub fn generate(&self) -> Result<(), Error>:
+        // Create output directory
+        std::fs::create_dir_all(self.config.output_dir)?
+        
+        // Generate index.html
+        if self.config.generate_index:
+            self.generate_index()?
+        
+        // Generate individual pages
+        for node in self.nodes:
+            self.generate_page(node)?
+        
+        // Generate search index
+        self.generate_search_index()?
+        
+        // Copy theme assets
+        self.copy_assets()?
+        
+        return Result::Ok(())
+    
+    fn generate_index(&self) -> Result<(), Error>:
+        let html = self.render_index()
+        let path = self.config.output_dir + "/index.html"
+        std::fs::write_file(path, html)
+        return Result::Ok(())
+    
+    fn generate_page(&self, node: DocNode) -> Result<(), Error>:
+        let html = self.render_page(node)
+        let filename = node.full_name.replace("::", "-").replace(".", "-") + ".html"
+        let path = self.config.output_dir + "/" + filename
+        std::fs::write_file(path, html)
+        return Result::Ok(())
+    
+    fn generate_search_index(&self) -> Result<(), Error>:
+        let json = self.render_search_index()
+        let path = self.config.output_dir + "/search.json"
+        std::fs::write_file(path, json)
+        return Result::Ok(())
+    
+    fn copy_assets(&self) -> Result<(), Error>:
+        // Copy CSS and JS files from theme
+        return Result::Ok(())
+    
+    fn render_index(&self) -> String:
+        var html = self.html_header()
+        html = html + "<body>"
+        html = html + "<header>"
+        html = html + "<h1>" + self.config.title + "</h1>"
+        html = html + "<p>" + self.config.description + "</p>"
+        html = html + "</header>"
+        html = html + "<main>"
+        html = html + "<h2>Modules</h2>"
+        html = html + "<ul>"
+        
+        for node in self.nodes:
+            if node.node_type == DocNodeType::Module:
+                html = html + "<li><a href=\"" + self.node_filename(node) + "\">" + node.name + "</a></li>"
+        
+        html = html + "</ul>"
+        html = html + "<h2>Structs</h2>"
+        html = html + "<ul>"
+        
+        for node in self.nodes:
+            if node.node_type == DocNodeType::Struct:
+                html = html + "<li><a href=\"" + self.node_filename(node) + "\">" + node.name + "</a></li>"
+        
+        html = html + "</ul>"
+        html = html + "<h2>Functions</h2>"
+        html = html + "<ul>"
+        
+        for node in self.nodes:
+            if node.node_type == DocNodeType::Function:
+                html = html + "<li><a href=\"" + self.node_filename(node) + "\">" + node.full_name + "</a></li>"
+        
+        html = html + "</ul>"
+        html = html + "</main>"
+        html = html + self.html_footer()
+        
+        return html
+    
+    fn render_page(&self, node: DocNode) -> String:
+        var html = self.html_header()
+        html = html + "<body>"
+        html = html + "<header>"
+        html = html + "<a href=\"index.html\">Home</a>"
+        html = html + "</header>"
+        html = html + "<main>"
+        
+        // Title
+        html = html + "<h1>" + node.name + "</h1>"
+        
+        // Type badge
+        html = html + "<span class=\"badge\">" + self.node_type_name(node.node_type) + "</span>"
+        
+        // Description
+        if node.description != "":
+            html = html + "<section class=\"description\">"
+            html = html + "<p>" + node.description + "</p>"
+            html = html + "</section>"
+        
+        // Parameters
+        if node.params.len() > 0:
+            html = html + "<section class=\"parameters\">"
+            html = html + "<h2>Parameters</h2>"
+            html = html + "<table>"
+            html = html + "<thead><tr><th>Name</th><th>Type</th><th>Description</th></tr></thead>"
+            html = html + "<tbody>"
+            
+            for param in node.params:
+                html = html + "<tr>"
+                html = html + "<td>" + param.name + "</td>"
+                html = html + "<td><code>" + param.type_name + "</code></td>"
+                html = html + "<td>" + param.description + "</td>"
+                html = html + "</tr>"
+            
+            html = html + "</tbody>"
+            html = html + "</table>"
+            html = html + "</section>"
+        
+        // Return type
+        match node.return_type:
+            Some(ret) => 
+                html = html + "<section class=\"returns\">"
+                html = html + "<h2>Returns</h2>"
+                html = html + "<code>" + ret + "</code>"
+                html = html + "</section>"
+            None => ()
+        
+        // Examples
+        if node.examples.len() > 0 && self.config.include_examples:
+            html = html + "<section class=\"examples\">"
+            html = html + "<h2>Examples</h2>"
+            
+            for example in node.examples:
+                html = html + "<pre><code>" + example + "</code></pre>"
+            
+            html = html + "</section>"
+        
+        // Notes
+        if node.notes.len() > 0:
+            html = html + "<section class=\"notes\">"
+            html = html + "<h2>Notes</h2>"
+            html = html + "<ul>"
+            
+            for note in node.notes:
+                html = html + "<li>" + note + "</li>"
+            
+            html = html + "</ul>"
+            html = html + "</section>"
+        
+        // Children
+        if node.children.len() > 0:
+            html = html + "<section class=\"children\">"
+            html = html + "<h2>Members</h2>"
+            html = html + "<ul>"
+            
+            for child in node.children:
+                html = html + "<li><a href=\"" + self.node_filename(child) + "\">" + child.name + "</a></li>"
+            
+            html = html + "</ul>"
+            html = html + "</section>"
+        
+        // Source link
+        if self.config.source_link:
+            html = html + "<footer class=\"source\">"
+            html = html + "<p>Source: <a href=\"" + node.source_file + "#L" + node.source_line.to_string() + "\">" 
+            html = html + node.source_file + ":" + node.source_line.to_string() + "</a></p>"
+            html = html + "</footer>"
+        
+        html = html + "</main>"
+        html = html + self.html_footer()
+        
+        return html
+    
+    fn render_search_index(&self) -> String:
+        var json = "[\n"
+        var first = true
+        
+        for node in self.nodes:
+            if not first:
+                json = json + ",\n"
+            first = false
+            
+            json = json + "  {"
+            json = json + "\"name\": \"" + node.name + "\","
+            json = json + "\"fullName\": \"" + node.full_name + "\","
+            json = json + "\"type\": \"" + self.node_type_name(node.node_type) + "\","
+            json = json + "\"description\": \"" + node.description + "\","
+            json = json + "\"path\": \"" + self.node_filename(node) + "\""
+            json = json + "}"
+        
+        json = json + "\n]"
+        return json
+    
+    fn html_header(&self) -> String:
+        return "<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+    <meta charset=\"UTF-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <title>" + self.config.title + "</title>
+    <link rel=\"stylesheet\" href=\"/theme/" + self.config.theme + "/style.css\">
+    <script src=\"/theme/" + self.config.theme + "/search.js\"></script>
+</head>
+"
+    
+    fn html_footer(&self) -> String:
+        return "
+    <footer>
+        <p>Generated by OmniLang Documentation Generator v" + self.config.version + "</p>
+    </footer>
+</body>
+</html>
+"
+    
+    fn node_filename(&self, node: DocNode) -> String:
+        return node.full_name.replace("::", "-").replace(".", "-") + ".html"
+    
+    fn node_type_name(&self, node_type: DocNodeType) -> String:
+        match node_type:
+            DocNodeType::Module => "module"
+            DocNodeType::Struct => "struct"
+            DocNodeType::Class => "class"
+            DocNodeType::Function => "function"
+            DocNodeType::Method => "method"
+            DocNodeType::Field => "field"
+            DocNodeType::Property => "property"
+            DocNodeType::Enum => "enum"
+            DocNodeType::EnumVariant => "variant"
+            DocNodeType::Trait => "trait"
+            DocNodeType::Impl => "impl"
+            DocNodeType::Constant => "constant"
+            DocNodeType::Type => "type"
+
+// Parse source file for documentation
+pub fn parse_source(path: String) -> Result<[DocNode], Error>:
+    let content = std::fs::read_file(path)?
+    return parse_doc_comments(content, path)
+
+// Parse documentation comments from source
+fn parse_doc_comments(content: String, source_file: String) -> [DocNode]:
+    var nodes = []
+    var lines = content.split("\n")
+    var i = 0
+    
+    while i < lines.len():
+        let line = lines[i]
+        
+        // Check for documentation comment
+        if line.starts_with("///") || line.starts_with("//!"):
+            let doc = parse_doc_block(lines, &i)
+            let node = parse_doc_to_node(doc, source_file, i)
+            if node.node_type != DocNodeType::Module:
+                nodes.push(node)
+        else:
+            i = i + 1
+    
+    return nodes
+
+fn parse_doc_block(lines: [String], pos: &Int) -> String:
+    var doc = ""
+    
+    while *pos < lines.len():
+        let line = lines[*pos]
+        
+        if line.starts_with("///"):
+            doc = doc + line[3..].trim() + "\n"
+        else if line.starts_with("//!"):
+            doc = doc + line[3..].trim() + "\n"
+        else:
+            break
+        
+        *pos = *pos + 1
+    
+    return doc
+
+fn parse_doc_to_node(doc: String, source_file: String, line: Int) -> DocNode:
+    // Parse documentation format
+    // # Name
+    // ## Description
+    // ### Parameters
+    // ### Returns
+    // ### Examples
+    
+    var name = "unknown"
+    var description = doc
+    var params: [DocParam] = []
+    var return_type = Option::None
+    
+    let lines = doc.split("\n")
+    
+    for line in lines:
+        if line.starts_with("# ") && name == "unknown":
+            name = line[2..].trim()
+        else if line.starts_with("## "):
+            let section = line[3..].trim()
+            
+            if section == "Parameters":
+                // Parse parameters
+                ()
+            else if section == "Returns":
+                // Parse return type
+                ()
+    
+    return DocNode {
+        node_type: DocNodeType::Function,
+        name: name,
+        full_name: name,
+        description: description,
+        params: params,
+        return_type: return_type,
+        examples: [],
+        notes: [],
+        warnings: [],
+        children: [],
+        source_file: source_file,
+        source_line: line
+    }
+
+// Generate documentation for a project
+pub fn generate_docs(source_dir: String, config: DocConfig) -> Result<(), Error>:
+    var generator = Generator::new(config)
+    
+    // Find all .omni files
+    for file in std::fs::glob(source_dir + "/**/*.omni"):
+        let nodes = parse_source(file)?
+        for node in nodes:
+            generator.add_node(node)
+    
+    return generator.generate()
+
+// Main CLI entry point
+pub fn main(args: [String]) -> Int:
+    if args.len() < 2:
+        println("Usage: omnidoc <source-dir> [output-dir]")
+        return 1
+    
+    let source_dir = args[1]
+    let output_dir = if args.len() >= 3 args[2] else "target/docs"
+    
+    let config = DocConfig::new()
+        .with_output_dir(output_dir)
+    
+    match generate_docs(source_dir, config):
+        Ok(_) => 
+            println("Documentation generated successfully!")
+            return 0
+        Err(e) => 
+            println("Error generating documentation: " + e.to_string())
+            return 1

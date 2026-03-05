@@ -1,0 +1,548 @@
+//! OmniLang Standard Library - Web Server Module
+//! 
+//! Provides HTTP server, routing, and API primitives for building backend services.
+
+module std::web::server;
+
+import std::web::{Request, Response, HttpMethod, HttpStatus};
+import std::async::{Future, spawn, sleep};
+import std::db::{Store, Database};
+
+// Re-export for convenience
+pub use std::web::*;
+
+/// HTTP Server instance
+pub struct Server {
+    port: Int,
+    host: String,
+    router: Router,
+    middleware: Vec<Middleware>,
+    running: Bool,
+}
+
+impl Server {
+    /// Create a new HTTP server
+    pub fn new() -> Server {
+        Server {
+            port: 8080,
+            host: "0.0.0.0".to_string(),
+            router: Router::new(),
+            middleware: Vec::new(),
+            running: false,
+        }
+    }
+    
+    /// Set the server host
+    pub fn with_host(mut self, host: String) -> Server {
+        self.host = host;
+        self
+    }
+    
+    /// Set the server port
+    pub fn with_port(mut self, port: Int) -> Server {
+        self.port = port;
+        self
+    }
+    
+    /// Add middleware to the server
+    pub fn use(mut self, middleware: Middleware) -> Server {
+        self.middleware.push(middleware);
+        self
+    }
+    
+    /// Register a route
+    pub fn route(mut self, path: String, method: HttpMethod, handler: Handler) -> Server {
+        self.router.register(path, method, handler);
+        self
+    }
+    
+    /// Convenience method for GET routes
+    pub fn get(self, path: String, handler: Handler) -> Server {
+        self.route(path, HttpMethod::Get, handler)
+    }
+    
+    /// Convenience method for POST routes
+    pub fn post(self, path: String, handler: Handler) -> Server {
+        self.route(path, HttpMethod::Post, handler)
+    }
+    
+    /// Convenience method for PUT routes
+    pub fn put(self, path: String, handler: Handler) -> Server {
+        self.route(path, HttpMethod::Put, handler)
+    }
+    
+    /// Convenience method for DELETE routes
+    pub fn delete(self, path: String, handler: Handler) -> Server {
+        self.route(path, HttpMethod::Delete, handler)
+    }
+    
+    /// Convenience method for PATCH routes
+    pub fn patch(self, path: String, handler: Handler) -> Server {
+        self.route(path, HttpMethod::Patch, handler)
+    }
+    
+    /// Start the HTTP server and listen for connections
+    /// This is the main entry point for the server
+    /// 
+    /// # Example
+    /// ```
+    /// server.listen(8080) {
+    ///     get "/api/users" => handle_get_users;
+    ///     post "/api/users" => handle_create_user;
+    /// }
+    /// ```
+    pub fn listen(self, port: Int, routes: fn(Router)) -> async fn() -> () {
+        async fn(port: Int, routes: fn(Router)) -> () {
+            let mut server = self.with_port(port);
+            
+            // Apply route definitions
+            routes(&mut server.router);
+            
+            // Start the server
+            server.running = true;
+            println("Server starting on " + server.host + ":" + port.to_string());
+            
+            // Main server loop
+            while server.running {
+                // Accept and handle connections
+                let connection = server.accept().await;
+                
+                // Spawn a new task to handle the connection
+                spawn(async fn(conn: Connection) {
+                    server.handle_connection(conn).await;
+                });
+            }
+        }
+        
+        return listen_impl(port, routes);
+    }
+    
+    /// Internal: Accept a new connection
+    async fn accept() -> Connection {
+        // This would use async I/O to accept connections
+        // In implementation, this links to the runtime's TCP accept
+        Connection::new()
+    }
+    
+    /// Internal: Handle a client connection
+    async fn handle_connection(&self, conn: Connection) -> () {
+        // Read request
+        let request = conn.read_request().await;
+        
+        // Apply middleware
+        let mut response = Response::new();
+        for mw in &self.middleware {
+            response = mw.process(request, |req| {
+                // Continue to next middleware
+                response
+            });
+        }
+        
+        // Route to handler
+        let handler = self.router.match_route(&request.method, &request.path);
+        match handler {
+            Some(h) => {
+                response = h.handle(request);
+            }
+            None => {
+                response = Response::new()
+                    .with_status(HttpStatus::not_found())
+                    .with_text("404 Not Found");
+            }
+        }
+        
+        // Send response
+        conn.write_response(response).await;
+    }
+    
+    /// Stop the server
+    pub fn stop(&mut self) -> () {
+        self.running = false;
+    }
+}
+
+/// Connection handler
+pub struct Connection {
+    // Internal implementation details
+}
+
+impl Connection {
+    /// Create a new connection
+    pub fn new() -> Connection {
+        Connection { }
+    }
+    
+    /// Read HTTP request from connection
+    pub async fn read_request(&self) -> Request {
+        // Implementation reads from TCP stream
+        Request {
+            method: HttpMethod::Get,
+            path: "/".to_string(),
+            headers: HashMap::new(),
+            body: Vec::new(),
+            query_params: HashMap::new(),
+        }
+    }
+    
+    /// Write HTTP response to connection
+    pub async fn write_response(&self, response: Response) -> () {
+        // Implementation writes to TCP stream
+    }
+    
+    /// Close the connection
+    pub fn close(&self) -> () {
+        // Implementation closes TCP connection
+    }
+}
+
+/// Route handler type
+pub type Handler = fn(Request) -> Response;
+
+/// Middleware type
+pub type Middleware = fn(Request, fn(Request) -> Response) -> Response;
+
+/// Router for managing routes
+pub struct Router {
+    routes: Vec<Route>,
+}
+
+impl Router {
+    /// Create a new router
+    pub fn new() -> Router {
+        Router {
+            routes: Vec::new(),
+        }
+    }
+    
+    /// Register a route
+    pub fn register(&mut self, path: String, method: HttpMethod, handler: Handler) -> () {
+        let route = Route {
+            path,
+            method,
+            handler,
+        };
+        self.routes.push(route);
+    }
+    
+    /// Match a request to a handler
+    pub fn match_route(&self, method: &HttpMethod, path: &str) -> Option<Handler> {
+        for route in &self.routes {
+            if route.method == *method && route.path == path {
+                return Some(route.handler);
+            }
+        }
+        None
+    }
+}
+
+/// Route definition
+struct Route {
+    path: String,
+    method: HttpMethod,
+    handler: Handler,
+}
+
+/// Middleware for request/response processing
+pub mod middleware {
+    use super::*;
+    
+    /// Logging middleware
+    pub fn logging() -> Middleware {
+        fn log(request: Request, next: fn(Request) -> Response) -> Response {
+            println(request.method.to_string() + " " + request.path);
+            next(request)
+        }
+        log
+    }
+    
+    /// CORS middleware
+    pub fn cors() -> Middleware {
+        fn cors_middleware(request: Request, next: fn(Request) -> Response) -> Response {
+            let mut response = next(request);
+            response.headers.insert("Access-Control-Allow-Origin".to_string(), "*".to_string());
+            response.headers.insert("Access-Control-Allow-Methods".to_string(), "GET, POST, PUT, DELETE, OPTIONS".to_string());
+            response.headers.insert("Access-Control-Allow-Headers".to_string(), "Content-Type, Authorization".to_string());
+            response
+        }
+        cors_middleware
+    }
+    
+    /// Authentication middleware
+    pub fn auth(verify_fn: fn(String) -> Bool) -> Middleware {
+        fn auth_middleware(request: Request, next: fn(Request) -> Response) -> Response {
+            let auth_header = request.headers.get("Authorization");
+            match auth_header {
+                Some(token) => {
+                    if verify_fn(token) {
+                        next(request)
+                    } else {
+                        Response::new()
+                            .with_status(HttpStatus::unauthorized())
+                            .with_text("Invalid token")
+                    }
+                }
+                None => {
+                    Response::new()
+                        .with_status(HttpStatus::unauthorized())
+                        .with_text("Missing authorization header")
+                }
+            }
+        }
+        auth_middleware
+    }
+    
+    /// Rate limiting middleware
+    pub fn rate_limit(max_requests: Int, window_ms: Int) -> Middleware {
+        // Simple in-memory rate limiting
+        fn rate_limiter(request: Request, next: fn(Request) -> Response) -> Response {
+            // Implementation would track requests per IP
+            next(request)
+        }
+        rate_limiter
+    }
+    
+    /// JSON body parser middleware
+    pub fn json_body() -> Middleware {
+        fn parse_json(request: Request, next: fn(Request) -> Response) -> Response {
+            let content_type = request.headers.get("Content-Type");
+            match content_type {
+                Some(ct) if ct.contains("application/json") => {
+                    // Parse JSON body
+                    next(request)
+                }
+                _ => next(request),
+            }
+        }
+        parse_json
+    }
+}
+
+/// Static file serving
+pub mod static_files {
+    use super::*;
+    
+    /// Serve static files from a directory
+    pub fn serve(dir: String) -> Handler {
+        fn handle(request: Request) -> Response {
+            let path = request.path;
+            // Strip leading slash
+            let file_path = if path.starts_with('/') {
+                dir.clone() + &path[1..]
+            } else {
+                dir.clone() + "/" + &path
+            };
+            
+            // Check if file exists
+            // In implementation, this would read from filesystem
+            Response::new()
+                .with_status(HttpStatus::not_found())
+                .with_text("File not found: " + file_path)
+        }
+        handle
+    }
+    
+    /// Serve a single file
+    pub fn serve_file(file_path: String, content_type: String) -> Handler {
+        fn handle(request: Request) -> Response {
+            Response::new()
+                .with_header("Content-Type".to_string(), content_type)
+                .with_text("File content would be here")
+        }
+        handle
+    }
+    
+    /// Serve index.html for directory requests
+    pub fn serve_index(dir: String) -> Handler {
+        fn handle(request: Request) -> Response {
+            let path = request.path;
+            if path.ends_with('/') {
+                let index_path = dir + path + "index.html";
+                // Serve index.html
+                Response::new()
+                    .with_header("Content-Type".to_string(), "text/html".to_string())
+                    .with_text("Index.html would be here")
+            } else {
+                Response::new()
+                    .with_status(HttpStatus::not_found())
+                    .with_text("Not found")
+            }
+        }
+        handle
+    }
+}
+
+/// Template rendering
+pub mod templates {
+    /// Simple template engine
+    pub struct TemplateEngine {
+        // Template storage
+    }
+    
+    impl TemplateEngine {
+        /// Create a new template engine
+        pub fn new() -> TemplateEngine {
+            TemplateEngine { }
+        }
+        
+        /// Load a template
+        pub fn load(&mut self, name: String, content: String) -> () {
+            // Store template
+        }
+        
+        /// Render a template with data
+        pub fn render(&self, name: String, data: HashMap<String, String>) -> String {
+            // Simple template rendering
+            // Replaces {{key}} with value
+            let mut result = "Template content".to_string();
+            for (key, value) in data {
+                result = result.replace("{{" + key + "}}", value);
+            }
+            result
+        }
+    }
+}
+
+/// Session management
+pub mod session {
+    /// Session store
+    pub struct SessionStore {
+        sessions: HashMap<String, Session>,
+    }
+    
+    impl SessionStore {
+        /// Create a new session store
+        pub fn new() -> SessionStore {
+            SessionStore {
+                sessions: HashMap::new(),
+            }
+        }
+        
+        /// Create a new session
+        pub fn create(&mut self, data: HashMap<String, String>) -> String {
+            let id = generate_session_id();
+            let session = Session {
+                id: id.clone(),
+                data,
+            };
+            self.sessions.insert(id.clone(), session);
+            id
+        }
+        
+        /// Get a session by ID
+        pub fn get(&self, id: &str) -> Option<&Session> {
+            self.sessions.get(id)
+        }
+        
+        /// Update a session
+        pub fn update(&mut self, id: String, data: HashMap<String, String>) -> () {
+            if let Some(session) = self.sessions.get_mut(&id) {
+                session.data = data;
+            }
+        }
+        
+        /// Delete a session
+        pub fn delete(&mut self, id: &str) -> () {
+            self.sessions.remove(id);
+        }
+    }
+    
+    /// Session data
+    pub struct Session {
+        pub id: String,
+        pub data: HashMap<String, String>,
+    }
+    
+    /// Generate a unique session ID
+    fn generate_session_id() -> String {
+        // Implementation would use cryptographically secure random
+        "session_" + std::time::timestamp().to_string()
+    }
+}
+
+/// Cookie utilities
+pub mod cookies {
+    /// Parse cookie header
+    pub fn parse(cookie_header: &str) -> HashMap<String, String> {
+        let mut cookies = HashMap::new();
+        for pair in cookie_header.split(';') {
+            let parts = pair.splitn(2, '=').collect::<Vec<_>>();
+            if parts.len() == 2 {
+                cookies.insert(parts[0].trim().to_string(), parts[1].trim().to_string());
+            }
+        }
+        cookies
+    }
+    
+    /// Create Set-Cookie header value
+    pub fn set_cookie(name: String, value: String, options: CookieOptions) -> String {
+        let mut cookie = name + "=" + value;
+        if let Some(max_age) = options.max_age {
+            cookie = cookie + "; Max-Age=" + max_age.to_string();
+        }
+        if let Some(domain) = options.domain {
+            cookie = cookie + "; Domain=" + domain;
+        }
+        if let Some(path) = options.path {
+            cookie = cookie + "; Path=" + path;
+        }
+        if options.http_only {
+            cookie = cookie + "; HttpOnly";
+        }
+        if options.secure {
+            cookie = cookie + "; Secure";
+        }
+        cookie
+    }
+    
+    /// Cookie options
+    pub struct CookieOptions {
+        pub max_age: Option<Int>,
+        pub domain: Option<String>,
+        pub path: Option<String>,
+        pub http_only: Bool,
+        pub secure: Bool,
+    }
+    
+    impl CookieOptions {
+        pub fn new() -> CookieOptions {
+            CookieOptions {
+                max_age: None,
+                domain: None,
+                path: None,
+                http_only: false,
+                secure: false,
+            }
+        }
+        
+        pub fn with_max_age(mut self, seconds: Int) -> CookieOptions {
+            self.max_age = Some(seconds);
+            self
+        }
+        
+        pub fn with_domain(mut self, domain: String) -> CookieOptions {
+            self.domain = Some(domain);
+            self
+        }
+        
+        pub fn with_path(mut self, path: String) -> CookieOptions {
+            self.path = Some(path);
+            self
+        }
+        
+        pub fn http_only(mut self) -> CookieOptions {
+            self.http_only = true;
+            self
+        }
+        
+        pub fn secure(mut self) -> CookieOptions {
+            self.secure = true;
+            self
+        }
+    }
+}
+
+// Convenience function for creating a server
+/// Create and configure an HTTP server
+pub fn server() -> Server {
+    Server::new()
+}

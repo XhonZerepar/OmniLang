@@ -1,0 +1,317 @@
+//! OmniLang Standard Library - Web Module
+//! 
+//! Contains web, HTTP, and networking primitives for full-stack development.
+//! This module provides both server-side (native) and client-side (WASM) functionality.
+
+module std::web;
+
+// Re-export submodules
+pub mod server;
+pub mod client;
+pub mod dom;
+pub mod realtime;
+
+pub use server::*;
+pub use client::*;
+pub use dom::*;
+pub use realtime::*;
+
+/// HTTP Methods
+pub enum HttpMethod {
+    Get,
+    Post,
+    Put,
+    Delete,
+    Patch,
+    Head,
+    Options,
+}
+
+/// HTTP Status Codes
+pub struct HttpStatus {
+    pub code: Int,
+    pub message: String,
+}
+
+impl HttpStatus {
+    pub fn ok() -> HttpStatus { HttpStatus { code: 200, message: "OK".to_string() } }
+    pub fn created() -> HttpStatus { HttpStatus { code: 201, message: "Created".to_string() } }
+    pub fn bad_request() -> HttpStatus { HttpStatus { code: 400, message: "Bad Request".to_string() } }
+    pub fn unauthorized() -> HttpStatus { HttpStatus { code: 401, message: "Unauthorized".to_string() } }
+    pub fn forbidden() -> HttpStatus { HttpStatus { code: 403, message: "Forbidden".to_string() } }
+    pub fn not_found() -> HttpStatus { HttpStatus { code: 404, message: "Not Found".to_string() } }
+    pub fn internal_error() -> HttpStatus { HttpStatus { code: 500, message: "Internal Server Error".to_string() } }
+}
+
+/// HTTP Request structure
+pub struct Request {
+    pub method: HttpMethod,
+    pub path: String,
+    pub headers: HashMap<String, String>,
+    pub body: Vec<u8>,
+    pub query_params: HashMap<String, String>,
+}
+
+/// HTTP Response structure
+pub struct Response {
+    pub status: HttpStatus,
+    pub headers: HashMap<String, String>,
+    pub body: Vec<u8>,
+}
+
+impl Response {
+    pub fn new() -> Response {
+        Response {
+            status: HttpStatus::ok(),
+            headers: HashMap::new(),
+            body: Vec::new(),
+        }
+    }
+
+    pub fn with_status(mut self, status: HttpStatus) -> Response {
+        self.status = status;
+        self
+    }
+
+    pub fn with_header(mut self, key: String, value: String) -> Response {
+        self.headers.insert(key, value);
+        self
+    }
+
+    pub fn with_body(mut self, body: Vec<u8>) -> Response {
+        self.body = body;
+        self
+    }
+
+    pub fn with_json<T: Serialize>(mut self, data: T) -> Response {
+        self.headers.insert("Content-Type".to_string(), "application/json".to_string());
+        self.body = data.to_json().into_bytes();
+        self
+    }
+
+    pub fn with_text(mut self, text: String) -> Response {
+        self.headers.insert("Content-Type".to_string(), "text/plain".to_string());
+        self.body = text.into_bytes();
+        self
+    }
+
+    pub fn with_html(mut self, html: String) -> Response {
+        self.headers.insert("Content-Type".to_string(), "text/html".to_string());
+        self.body = html.into_bytes();
+        self
+    }
+}
+
+/// JSON serialization trait
+pub trait Serialize {
+    fn to_json(&self) -> String;
+}
+
+/// JSON deserialization trait
+pub trait Deserialize: Sized {
+    fn from_json(json: &str) -> Result<Self, String>;
+}
+
+/// JSON utilities
+pub mod json {
+    use super::*;
+    
+    /// Parse JSON string into a value
+    pub fn parse<T: Deserialize>(json: &str) -> Result<T, String> {
+        T::from_json(json)
+    }
+    
+    /// Convert value to JSON string
+    pub fn stringify<T: Serialize>(value: &T) -> String {
+        value.to_json()
+    }
+    
+    /// Create JSON object from key-value pairs
+    pub fn object(fields: [(String, JSONValue); _]) -> JSONValue {
+        JSONValue::Object(HashMap::from(fields))
+    }
+    
+    /// Create JSON array
+    pub fn array(items: [JSONValue; _]) -> JSONValue {
+        JSONValue::Array(items.to_vec())
+    }
+}
+
+/// JSON Value representation
+pub enum JSONValue {
+    Null,
+    Bool(Bool),
+    Int(Int),
+    Float(Float),
+    String(String),
+    Array(Vec<JSONValue>),
+    Object(HashMap<String, JSONValue>),
+}
+
+impl Serialize for JSONValue {
+    fn to_json(&self) -> String {
+        match self {
+            JSONValue::Null => "null".to_string(),
+            JSONValue::Bool(b) => b.to_string(),
+            JSONValue::Int(i) => i.to_string(),
+            JSONValue::Float(f) => f.to_string(),
+            JSONValue::String(s) => format!("\"{}\"", s.escape()),
+            JSONValue::Array(arr) => {
+                let items = arr.iter().map(|v| v.to_json()).collect::<Vec<_>>().join(", ");
+                format!("[{}]", items)
+            }
+            JSONValue::Object(obj) => {
+                let fields = obj.iter()
+                    .map(|(k, v)| format!("\"{}\": {}", k.escape(), v.to_json()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{{{}}}", fields)
+            }
+        }
+    }
+}
+
+impl Deserialize for JSONValue {
+    fn from_json(json: &str) -> Result<JSONValue, String> {
+        // Simple JSON parser implementation
+        // In production, this would be a proper recursive descent parser
+        let json = json.trim();
+        
+        if json.starts_with('{') {
+            // Parse object
+            let mut obj = HashMap::new();
+            let content = json[1..json.len()-1].trim();
+            if content.len() > 0 {
+                for pair in content.split(',') {
+                    let parts = pair.splitn(2, ':').collect::<Vec<_>>();
+                    if parts.len() == 2 {
+                        let key = parts[0].trim().trim_matches('"');
+                        let value = parts[1].trim();
+                        obj.insert(key.to_string(), JSONValue::from_json(value)?);
+                    }
+                }
+            }
+            Ok(JSONValue::Object(obj))
+        } else if json.starts_with('[') {
+            // Parse array
+            let content = json[1..json.len()-1].trim();
+            let items = if content.len() > 0 {
+                content.split(',')
+                    .map(|s| JSONValue::from_json(s.trim()))
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                Vec::new()
+            };
+            Ok(JSONValue::Array(items))
+        } else if json == "null" {
+            Ok(JSONValue::Null)
+        } else if json == "true" {
+            Ok(JSONValue::Bool(true))
+        } else if json == "false" {
+            Ok(JSONValue::Bool(false))
+        } else if json.starts_with('"') {
+            Ok(JSONValue::String(json[1..json.len()-1].to_string()))
+        } else if json.contains('.') {
+            json.parse::<Float>()
+                .map(JSONValue::Float)
+                .map_err(|_| "Invalid float".to_string())
+        } else {
+            json.parse::<Int>()
+                .map(JSONValue::Int)
+                .map_err(|_| "Invalid int".to_string())
+        }
+    }
+}
+
+// Derive macro for JSON serialization
+macro_rules! json_derive {
+    ($struct:ident { $( $field:ident : $type:ty ),* $(,)? }) => {
+        impl Serialize for $struct {
+            fn to_json(&self) -> String {
+                let mut fields = Vec::new();
+                $( fields.push(format!("\"{}\": {}", stringify!($field), self.$field.to_json())); )*
+                format!("{{{}}}", fields.join(", "))
+            }
+        }
+        
+        impl Deserialize for $struct {
+            fn from_json(json: &str) -> Result<Self, String> {
+                let value = JSONValue::from_json(json)?;
+                match value {
+                    JSONValue::Object(obj) => {
+                        $( let $field = obj.get(stringify!($field))
+                            .ok_or(format!("Missing field: {}", stringify!($field)))?
+                            .clone()
+                            .cast::<$type>()?; )*
+                        Ok($struct { $( $field ),* })
+                    }
+                    _ => Err("Expected object".to_string())
+                }
+            }
+        }
+        
+        impl JSONValue {
+            fn cast<T: Deserialize>(self) -> Result<T, String> {
+                T::from_json(&self.to_json())
+            }
+        }
+    };
+}
+
+// URL utilities
+pub mod url {
+    /// Parse URL into components
+    pub fn parse(url: &str) -> Result<Url, String> {
+        // Simple URL parser
+        let parts = url.splitn(2, "://").collect::<Vec<_>>();
+        if parts.len() != 2 {
+            return Err("Invalid URL: missing scheme".to_string());
+        }
+        
+        let scheme = parts[0].to_string();
+        let rest = parts[1];
+        
+        let (host, path) = if let Some(idx) = rest.find('/') {
+            (rest[..idx].to_string(), rest[idx..].to_string())
+        } else {
+            (rest.to_string(), "/".to_string())
+        };
+        
+        Ok(Url { scheme, host, path, query: None })
+    }
+    
+    pub struct Url {
+        pub scheme: String,
+        pub host: String,
+        pub path: String,
+        pub query: Option<String>,
+    }
+    
+    impl Url {
+        pub fn to_string(&self) -> String {
+            format!("{}://{}{}", self.scheme, self.host, self.path)
+        }
+    }
+}
+
+/// Content type constants
+pub mod content_type {
+    pub const JSON: &str = "application/json";
+    pub const TEXT: &str = "text/plain";
+    pub const HTML: &str = "text/html";
+    pub const CSS: &str = "text/css";
+    pub const JAVASCRIPT: &str = "application/javascript";
+    pub const XML: &str = "application/xml";
+    pub const FORM: &str = "application/x-www-form-urlencoded";
+    pub const MULTIPART: &str = "multipart/form-data";
+    pub const OCTET_STREAM: &str = "application/octet-stream";
+    pub const PNG: &str = "image/png";
+    pub const JPEG: &str = "image/jpeg";
+    pub const SVG: &str = "image/svg+xml";
+    pub const PDF: &str = "application/pdf";
+    pub const WAV: &str = "audio/wav";
+    pub const MP4: &str = "video/mp4";
+    pub const WEBM: &str = "video/webm";
+    pub const GZIP: &str = "application/gzip";
+    pub const ZIP: &str = "application/zip";
+}

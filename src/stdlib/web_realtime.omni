@@ -1,0 +1,451 @@
+//! OmniLang Standard Library - Realtime Module
+//! 
+//! Provides WebSocket and Server-Sent Events (SSE) for real-time communication.
+
+module std::web::realtime;
+
+import std::web::{Request, Response};
+
+/// WebSocket client for real-time bidirectional communication
+pub struct WebSocket {
+    url: String,
+    ready_state: WebSocketState,
+    message_handler: Option<fn(String) -> ()>,
+    error_handler: Option<fn(String) -> ()>,
+}
+
+impl WebSocket {
+    /// Create a new WebSocket connection
+    pub fn connect(url: String) -> async fn() -> Result<WebSocket, String> {
+        async fn() -> Result<WebSocket, String> {
+            // Implementation would use native WebSocket or JS binding
+            Ok(WebSocket {
+                url,
+                ready_state: WebSocketState::Open,
+                message_handler: None,
+                error_handler: None,
+            })
+        }
+    }
+    
+    /// Set message handler
+    pub fn on_message(mut self, handler: fn(String) -> ()) -> WebSocket {
+        self.message_handler = Some(handler);
+        self
+    }
+    
+    /// Set error handler
+    pub fn on_error(mut self, handler: fn(String) -> ()) -> WebSocket {
+        self.error_handler = Some(handler);
+        self
+    }
+    
+    /// Send text message
+    pub fn send(&self, message: String) -> Result<(), String> {
+        if self.ready_state != WebSocketState::Open {
+            return Err("WebSocket not connected".to_string());
+        }
+        // Implementation sends via WebSocket
+        Ok(())
+    }
+    
+    /// Send binary message
+    pub fn send_binary(&self, data: Vec<u8>) -> Result<(), String> {
+        if self.ready_state != WebSocketState::Open {
+            return Err("WebSocket not connected".to_string());
+        }
+        // Implementation sends binary via WebSocket
+        Ok(())
+    }
+    
+    /// Send JSON message
+    pub fn send_json<T: Serialize>(&self, data: &T) -> Result<(), String> {
+        let json = data.to_json();
+        self.send(json)
+    }
+    
+    /// Close the connection
+    pub fn close(&self) -> () {
+        // Implementation closes WebSocket
+    }
+    
+    /// Close with code and reason
+    pub fn close_with(&self, code: Int, reason: String) -> () {
+        // Implementation closes WebSocket with code and reason
+    }
+    
+    /// Get ready state
+    pub fn ready_state(&self) -> WebSocketState {
+        self.ready_state.clone()
+    }
+    
+    /// Check if connected
+    pub fn is_connected(&self) -> Bool {
+        self.ready_state == WebSocketState::Open
+    }
+}
+
+/// WebSocket connection state
+#[derive(Clone)]
+pub enum WebSocketState {
+    Connecting,
+    Open,
+    Closing,
+    Closed,
+}
+
+/// WebSocket message
+pub struct Message {
+    pub data: String,
+    pub is_binary: Bool,
+}
+
+impl Message {
+    /// Parse as text
+    pub fn text(&self) -> String {
+        self.data.clone()
+    }
+    
+    /// Parse as JSON
+    pub fn json<T: Deserialize>(&self) -> Result<T, String> {
+        T::from_json(&self.data)
+    }
+    
+    /// Get raw bytes
+    pub fn bytes(&self) -> Vec<u8> {
+        self.data.as_bytes().to_vec()
+    }
+}
+
+/// Event emitter for WebSocket events
+pub mod ws_events {
+    /// WebSocket event types
+    pub enum Event {
+        Open,
+        Message(Message),
+        Error(String),
+        Close(CloseInfo),
+    }
+    
+    /// Close information
+    pub struct CloseInfo {
+        pub code: Int,
+        pub reason: String,
+        pub was_clean: Bool,
+    }
+}
+
+/// Server-Sent Events (SSE) client for server-to-client streaming
+pub struct EventSource {
+    url: String,
+    event_handlers: HashMap<String, fn(String) -> ()>,
+    error_handler: Option<fn(String) -> ()>,
+    connected: Bool,
+}
+
+impl EventSource {
+    /// Create a new EventSource connection
+    pub fn new(url: String) -> Result<EventSource, String> {
+        // Implementation would create EventSource
+        Ok(EventSource {
+            url,
+            event_handlers: HashMap::new(),
+            error_handler: None,
+            connected: false,
+        })
+    }
+    
+    /// Set handler for specific event type
+    pub fn on_event(mut self, event_type: String, handler: fn(String) -> ()) -> EventSource {
+        self.event_handlers.insert(event_type, handler);
+        self
+    }
+    
+    /// Set default message handler
+    pub fn on_message(mut self, handler: fn(String) -> ()) -> EventSource {
+        self.event_handlers.insert("message".to_string(), handler);
+        self
+    }
+    
+    /// Set error handler
+    pub fn on_error(mut self, handler: fn(String) -> ()) -> EventSource {
+        self.error_handler = Some(handler);
+        self
+    }
+    
+    /// Connect to the server
+    pub fn connect(&mut self) -> async fn() -> Result<(), String> {
+        async fn() -> Result<(), String> {
+            // Implementation connects to SSE endpoint
+            self.connected = true;
+            Ok(())
+        }
+    }
+    
+    /// Close the connection
+    pub fn close(&self) -> () {
+        // Implementation closes EventSource
+    }
+    
+    /// Check if connected
+    pub fn is_connected(&self) -> Bool {
+        self.connected
+    }
+}
+
+/// SSE Event
+pub struct SSEEvent {
+    pub event_type: String,
+    pub data: String,
+    pub id: Option<String>,
+    pub retry: Option<Int>,
+}
+
+impl SSEEvent {
+    /// Get the event type
+    pub fn event_type(&self) -> String {
+        self.event_type.clone()
+    }
+    
+    /// Get the event data
+    pub fn data(&self) -> String {
+        self.data.clone()
+    }
+    
+    /// Get event ID
+    pub fn id(&self) -> Option<String> {
+        self.id.clone()
+    }
+    
+    /// Get retry interval
+    pub fn retry(&self) -> Option<Int> {
+        self.retry.clone()
+    }
+    
+    /// Parse JSON data
+    pub fn json<T: Deserialize>(&self) -> Result<T, String> {
+        T::from_json(&self.data)
+    }
+}
+
+/// Server-side SSE handler for sending events
+pub mod sse_server {
+    /// SSE response builder
+    pub struct SSEResponse {
+        event_type: String,
+        data: String,
+        id: Option<Int>,
+        retry: Option<Int>,
+    }
+    
+    impl SSEResponse {
+        /// Create a new SSE response
+        pub fn new() -> SSEResponse {
+            SSEResponse {
+                event_type: "message".to_string(),
+                data: "".to_string(),
+                id: None,
+                retry: None,
+            }
+        }
+        
+        /// Set event type
+        pub fn event(mut self, event_type: String) -> SSEResponse {
+            self.event_type = event_type;
+            self
+        }
+        
+        /// Set event data
+        pub fn data(mut self, data: String) -> SSEResponse {
+            self.data = data;
+            self
+        }
+        
+        /// Set event ID
+        pub fn id(mut self, id: Int) -> SSEResponse {
+            self.id = Some(id);
+            self
+        }
+        
+        /// Set retry interval (milliseconds)
+        pub fn retry(mut self, ms: Int) -> SSEResponse {
+            self.retry = Some(ms);
+            self
+        }
+        
+        /// Convert to SSE format string
+        pub fn to_sse(&self) -> String {
+            let mut sse = String::new();
+            
+            if !self.event_type.is_empty() && self.event_type != "message" {
+                sse = sse + "event: " + &self.event_type + "\n";
+            }
+            
+            // Data can be multiple lines
+            for line in self.data.split('\n') {
+                sse = sse + "data: " + line + "\n";
+            }
+            
+            if let Some(id) = self.id {
+                sse = sse + "id: " + &id.to_string() + "\n";
+            }
+            
+            if let Some(retry) = self.retry {
+                sse = sse + "retry: " + &retry.to_string() + "\n";
+            }
+            
+            sse + "\n"
+        }
+    }
+    
+    /// Create SSE response for a stream
+    pub fn stream(events: Vec<SSEResponse>) -> String {
+        events.iter()
+            .map(|e| e.to_sse())
+            .collect::<Vec<_>>()
+            .join("")
+    }
+}
+
+/// Channel for async communication
+pub mod channel {
+    /// Create a channel for async communication
+    pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
+        (Sender::new(), Receiver::new())
+    }
+    
+    /// Sender end of channel
+    pub struct Sender<T> {
+        // Internal implementation
+    }
+    
+    impl<T> Sender<T> {
+        fn new() -> Sender<T> {
+            Sender { }
+        }
+        
+        /// Send a value
+        pub fn send(&self, value: T) -> async fn() -> () {
+            async fn() -> () {
+                // Implementation sends value to receiver
+            }
+        }
+        
+        /// Try to send without blocking
+        pub fn try_send(&self, value: T) -> Result<(), String> {
+            // Implementation tries to send
+            Ok(())
+        }
+    }
+    
+    /// Receiver end of channel
+    pub struct Receiver<T> {
+        // Internal implementation
+    }
+    
+    impl<T> Receiver<T> {
+        fn new() -> Receiver<T> {
+            Receiver { }
+        }
+        
+        /// Receive a value
+        pub fn recv(&self) -> async fn() -> T {
+            async fn<T>() -> T {
+                // Implementation receives value from sender
+                // This would need type parameter handling
+                panic!("Unimplemented")
+            }
+        }
+        
+        /// Try to receive without blocking
+        pub fn try_recv(&self) -> Option<T> {
+            // Implementation tries to receive
+            None
+        }
+    }
+}
+
+/// Broadcast channel for one-to-many communication
+pub mod broadcast {
+    /// Create a broadcast channel
+    pub fn broadcast<T>(name: String) -> (BroadcastSender<T>, BroadcastReceiver<T>) {
+        (BroadcastSender::new(name.clone()), BroadcastReceiver::new(name))
+    }
+    
+    /// Broadcast sender
+    pub struct BroadcastSender<T> {
+        name: String,
+    }
+    
+    impl<T> BroadcastSender<T> {
+        fn new(name: String) -> BroadcastSender<T> {
+            BroadcastSender { name }
+        }
+        
+        /// Broadcast a value to all receivers
+        pub fn send(&self, value: T) -> () {
+            // Implementation broadcasts to all receivers
+        }
+    }
+    
+    /// Broadcast receiver
+    pub struct BroadcastReceiver<T> {
+        name: String,
+    }
+    
+    impl<T> BroadcastReceiver<T> {
+        fn new(name: String) -> BroadcastReceiver<T> {
+            BroadcastReceiver { name }
+        }
+        
+        /// Receive a broadcasted value
+        pub fn recv(&self) -> async fn() -> T {
+            async fn<T>() -> T {
+                // Implementation receives broadcast
+                panic!("Unimplemented")
+            }
+        }
+    }
+}
+
+/// Utilities
+pub mod utils {
+    /// Generate a unique WebSocket protocol subprotocol
+    pub fn generate_protocol() -> String {
+        // Generate random string
+        "omni-ws-".to_string()
+    }
+    
+    /// Validate WebSocket URL
+    pub fn validate_url(url: &str) -> Bool {
+        url.starts_with("ws://") || url.starts_with("wss://")
+    }
+    
+    /// Parse WebSocket URL
+    pub fn parse_url(url: &str) -> Result<(String, String, String), String> {
+        if !validate_url(url) {
+            return Err("Invalid WebSocket URL".to_string());
+        }
+        
+        // Simple parsing
+        let parts = url.splitn(3, "://").collect::<Vec<_>>();
+        if parts.len() < 3 {
+            return Err("Invalid WebSocket URL format".to_string());
+        }
+        
+        let scheme = parts[0].to_string();
+        let rest = parts[2];
+        
+        let (host, path) = if let Some(idx) = rest.find('/') {
+            (rest[..idx].to_string(), rest[idx..].to_string())
+        } else {
+            (rest.to_string(), "/".to_string())
+        };
+        
+        Ok((scheme, host, path))
+    }
+}
+
+// Re-export
+pub use std::web::Serialize;
+pub use std::web::Deserialize;

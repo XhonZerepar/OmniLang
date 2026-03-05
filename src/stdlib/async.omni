@@ -1,0 +1,473 @@
+//! OmniLang Standard Library - Async Runtime Module
+//! 
+//! Provides async/await primitives, Futures, and runtime support for concurrent operations.
+
+module std::async;
+
+import std::collections::Vec;
+
+/// Future trait for async operations
+pub trait Future {
+    type Output;
+    
+    /// Poll the future for completion
+    fn poll(&self) -> Poll<Self::Output>;
+    
+    /// Map output to another type
+    fn map<U, F>(self, f: F) -> Map<Self, F>
+    where
+        Self: Sized,
+        F: FnOnce(Self::Output) -> U,
+    {
+        Map { future: self, f }
+    }
+    
+    /// Chain another future
+    fn then<F, U>(self, f: F) -> Then<Self, F>
+    where
+        Self: Sized,
+        F: FnOnce(Self::Output) -> U,
+        U: Future,
+    {
+        Then { future: self, f }
+    }
+}
+
+/// Poll result
+pub enum Poll<T> {
+    Ready(T),
+    Pending,
+}
+
+/// Mapped future
+pub struct Map<F, Fx> {
+    future: F,
+    f: Fx,
+}
+
+impl<T, U, F, Fx> Future for Map<F, Fx>
+where
+    F: Future,
+    Fx: FnOnce(F::Output) -> U,
+{
+    type Output = U;
+    
+    fn poll(&self) -> Poll<U> {
+        match self.future.poll() {
+            Poll::Ready(v) => Poll::Ready((self.f)(v)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// Then future
+pub struct Then<F, Fx> {
+    future: F,
+    f: Fx,
+}
+
+impl<T, U, F, Fx> Future for Then<F, Fx>
+where
+    F: Future,
+    Fx: FnOnce(F::Output) -> U,
+    U: Future,
+{
+    type Output = U::Output;
+    
+    fn poll(&self) -> Poll<U::Output> {
+        // Implementation
+        Poll::Pending
+    }
+}
+
+/// Async runtime for executing futures
+pub struct Runtime {
+    // Internal runtime state
+}
+
+impl Runtime {
+    /// Create a new runtime
+    pub fn new() -> Runtime {
+        Runtime { }
+    }
+    
+    /// Spawn a new async task
+    pub fn spawn<F: Future>(&self, future: F) -> Task<F::Output> {
+        // Implementation spawns task
+        Task { }
+    }
+    
+    /// Block on a future
+    pub fn block_on<F: Future>(&self, future: F) -> F::Output {
+        // Implementation blocks current thread
+        // For demo, just poll once
+        match future.poll() {
+            Poll::Ready(v) => v,
+            Poll::Pending => panic!("Future did not complete"),
+        }
+    }
+    
+    /// Run the runtime
+    pub fn run<F: Future>(&self, future: F) -> F::Output {
+        self.block_on(future)
+    }
+}
+
+/// Handle to a spawned task
+pub struct Task<T> {
+    // Internal task handle
+}
+
+impl<T> Task<T> {
+    /// Await the task completion
+    pub fn await(&self) -> T {
+        // Implementation waits for task
+        panic!("Unimplemented")
+    }
+    
+    /// Abort the task
+    pub fn abort(&self) -> () {
+        // Implementation aborts task
+    }
+}
+
+/// Spawn a new async task
+pub fn spawn<F: Future>(future: F) -> Task<F::Output> {
+    let runtime = Runtime::new();
+    runtime.spawn(future)
+}
+
+/// Sleep for a duration
+pub async fn sleep(millis: u64) -> () {
+    // Implementation uses async timer
+    // This would integrate with the runtime's event loop
+}
+
+/// Yield execution to the runtime
+pub async fn yield_now() -> () {
+    // Implementation yields to event loop
+}
+
+/// Join multiple futures
+pub async fn join_all<F: Future>(futures: Vec<F>) -> Vec<F::Output> {
+    // Wait for all futures to complete
+    Vec::new()
+}
+
+/// Select from multiple futures (race)
+pub async fn select_all<F: Future>(futures: Vec<F>) -> (usize, F::Output) {
+    // Return when any future completes
+    (0, panic!("Unimplemented"))
+}
+
+/// Race - complete when first future completes
+pub async fn race<F: Future>(futures: Vec<F>) -> F::Output {
+    // Implementation races futures
+    panic!("Unimplemented")
+}
+
+/// Retry with exponential backoff
+pub async fn retry<T, E, F: Fn() -> Future<Output=Result<T, E>>>(
+    mut max_attempts: Int,
+    delay_ms: Int,
+    mut f: F,
+) -> Result<T, E> {
+    let mut attempt = 0;
+    loop {
+        match f().await {
+            Ok(v) => return Ok(v),
+            Err(e) if attempt < max_attempts => {
+                attempt = attempt + 1;
+                sleep(delay_ms * attempt).await;
+                delay_ms = delay_ms * 2; // Exponential backoff
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+/// Timeout for a future
+pub async fn timeout<T, F: Future>(duration_ms: Int, future: F) -> Result<T, String> {
+    // Implementation times out after duration
+    match future.poll() {
+        Poll::Ready(v) => Ok(v),
+        Poll::Pending => Err("Timed out".to_string()),
+    }
+}
+
+/// Stream trait for async iteration
+pub trait Stream {
+    type Item;
+    
+    /// Get next item from stream
+    fn next(&self) -> async fn() -> Option<Self::Item>;
+    
+    /// Collect stream into vector
+    fn collect(&self) -> async fn() -> Vec<Self::Item> {
+        let mut items = Vec::new();
+        loop {
+            match self.next().await {
+                Some(item) => items.push(item),
+                None => break,
+            }
+        }
+        items
+    }
+    
+    /// Map stream items
+    fn map<U, F>(self, f: F) -> MapStream<Self, F>
+    where
+        Self: Sized,
+        F: Fn(Self::Item) -> U,
+    {
+        MapStream { stream: self, f }
+    }
+    
+    /// Filter stream items
+    fn filter<F>(self, predicate: F) -> FilterStream<Self, F>
+    where
+        Self: Sized,
+        F: Fn(&Self::Item) -> Bool,
+    {
+        FilterStream { stream: self, predicate }
+    }
+}
+
+/// Mapped stream
+pub struct MapStream<S, F> {
+    stream: S,
+    f: F,
+}
+
+impl<S: Stream, U, F> Stream for MapStream<S, F>
+where
+    F: Fn(S::Item) -> U,
+{
+    type Item = U;
+    
+    fn next(&self) -> async fn() -> Option<U> {
+        // Implementation
+        None
+    }
+}
+
+/// Filtered stream
+pub struct FilterStream<S, F> {
+    stream: S,
+    predicate: F,
+}
+
+impl<S: Stream, F> Stream for FilterStream<S, F>
+where
+    F: Fn(&S::Item) -> Bool,
+{
+    type Item = S::Item;
+    
+    fn next(&self) -> async fn() -> Option<S::Item> {
+        // Implementation
+        None
+    }
+}
+
+/// Mutex for async synchronization
+pub struct Mutex<T> {
+    data: T,
+    locked: Bool,
+}
+
+impl<T> Mutex<T> {
+    /// Create a new mutex
+    pub fn new(data: T) -> Mutex<T> {
+        Mutex { data, locked: false }
+    }
+    
+    /// Lock the mutex
+    pub fn lock(&self) -> async fn() -> MutexGuard<T> {
+        async fn<T>() -> MutexGuard<T> {
+            // Implementation waits for lock
+            MutexGuard { mutex: self }
+        }
+    }
+    
+    /// Try to lock without blocking
+    pub fn try_lock(&self) -> Option<MutexGuard<T>> {
+        if !self.locked {
+            Some(MutexGuard { mutex: self })
+        } else {
+            None
+        }
+    }
+}
+
+/// Mutex guard
+pub struct MutexGuard<'a, T> {
+    mutex: &'a Mutex<T>,
+}
+
+impl<'a, T> MutexGuard<'a, T> {
+    /// Get reference to data
+    pub fn get(&self) -> &T {
+        &self.mutex.data
+    }
+    
+    /// Get mutable reference to data
+    pub fn get_mut(&mut self) -> &mut T {
+        &mut self.mutex.data
+    }
+}
+
+impl<'a, T> Drop for MutexGuard<'a, T> {
+    fn drop(&mut self) -> () {
+        // Release lock
+    }
+}
+
+/// RwLock for multiple readers / single writer
+pub struct RwLock<T> {
+    data: T,
+    readers: Int,
+    writer: Bool,
+}
+
+impl<T> RwLock<T> {
+    /// Create a new RwLock
+    pub fn new(data: T) -> RwLock<T> {
+        RwLock { data, readers: 0, writer: false }
+    }
+    
+    /// Read lock
+    pub fn read(&self) -> async fn() -> RwLockReadGuard<T> {
+        async fn<T>() -> RwLockReadGuard<T> {
+            RwLockReadGuard { lock: self }
+        }
+    }
+    
+    /// Write lock
+    pub fn write(&self) -> async fn() -> RwLockWriteGuard<T> {
+        async fn<T>() -> RwLockWriteGuard<T> {
+            RwLockWriteGuard { lock: self }
+        }
+    }
+}
+
+pub struct RwLockReadGuard<'a, T> {
+    lock: &'a RwLock<T>,
+}
+
+impl<'a, T> Drop for RwLockReadGuard<'a, T> {
+    fn drop(&mut self) -> () {
+        // Release read lock
+    }
+}
+
+pub struct RwLockWriteGuard<'a, T> {
+    lock: &'a RwLock<T>,
+}
+
+impl<'a, T> Drop for RwLockWriteGuard<'a, T> {
+    fn drop(&mut self) -> () {
+        // Release write lock
+    }
+}
+
+/// Semaphore for limiting concurrent access
+pub struct Semaphore {
+    permits: Int,
+    available: Int,
+}
+
+impl Semaphore {
+    /// Create a new semaphore
+    pub fn new(permits: Int) -> Semaphore {
+        Semaphore { permits, available: permits }
+    }
+    
+    /// Acquire a permit
+    pub fn acquire(&self) -> async fn() -> SemaphoreGuard {
+        async fn() -> SemaphoreGuard {
+            // Implementation waits for permit
+            SemaphoreGuard { semaphore: self }
+        }
+    }
+    
+    /// Try to acquire without blocking
+    pub fn try_acquire(&self) -> Option<SemaphoreGuard> {
+        if self.available > 0 {
+            Some(SemaphoreGuard { semaphore: self })
+        } else {
+            None
+        }
+    }
+}
+
+pub struct SemaphoreGuard<'a> {
+    semaphore: &'a Semaphore,
+}
+
+impl<'a> Drop for SemaphoreGuard<'a> {
+    fn drop(&mut self) -> () {
+        // Release permit
+    }
+}
+
+/// Barrier for synchronizing multiple tasks
+pub struct Barrier {
+    count: Int,
+    waiting: Int,
+}
+
+impl Barrier {
+    /// Create a new barrier
+    pub fn new(count: Int) -> Barrier {
+        Barrier { count, waiting: 0 }
+    }
+    
+    /// Wait for all parties
+    pub fn wait(&self) -> async fn() -> () {
+        async fn() -> () {
+            // Implementation waits for count parties
+        }
+    }
+}
+
+/// Once cell for one-time initialization
+pub struct OnceCell<T> {
+    data: Option<T>,
+    initialized: Bool,
+}
+
+impl<T> OnceCell<T> {
+    /// Create a new OnceCell
+    pub fn new() -> OnceCell<T> {
+        OnceCell { data: None, initialized: false }
+    }
+    
+    /// Get the value, initializing if needed
+    pub fn get_or_init<F: FnOnce() -> T>(&mut self, f: F) -> &T {
+        if !self.initialized {
+            self.data = Some(f());
+            self.initialized = true;
+        }
+        self.data.as_ref().unwrap()
+    }
+    
+    /// Get the value if initialized
+    pub fn get(&self) -> Option<&T> {
+        self.data.as_ref()
+    }
+}
+
+/// Default runtime
+pub fn runtime() -> Runtime {
+    Runtime::new()
+}
+
+/// Spawn a task on the default runtime
+pub fn spawn_task<F: Future>(future: F) -> Task<F::Output> {
+    runtime().spawn(future)
+}
+
+/// Block on the default runtime
+pub fn block_on<F: Future>(future: F) -> F::Output {
+    runtime().block_on(future)
+}

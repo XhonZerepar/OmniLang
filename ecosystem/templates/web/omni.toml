@@ -1,0 +1,216 @@
+// OmniLang Web Application Template
+// Full-stack web application with backend and frontend
+
+// ============================================
+// PROJECT STRUCTURE
+// ============================================
+// src/
+//   main.omni          - Application entry point
+//   routes.omni       - Route definitions
+//   handlers.omni     - HTTP request handlers
+//   models.omni       - Data models
+//   views/            - View templates
+//   static/           - Static assets (CSS, JS, images)
+// tests/
+//   integration.omni  - Integration tests
+// omni.toml           - Project configuration
+
+// ============================================
+// MAIN ENTRY POINT
+// ============================================
+
+fn main(args: [String]) -> Int:
+    println("Starting OmniLang Web App...")
+    
+    // Create and configure server
+    let config = ServerConfig::new("0.0.0.0", 8080)
+        .with_workers(4)
+        .with_timeout(30000)
+    
+    // Mount routes
+    let mut server = HttpServer::new(config)
+    
+    // API routes
+    server.get("/api/users", handlers::list_users)
+    server.get("/api/users/:id", handlers::get_user)
+    server.post("/api/users", handlers::create_user)
+    server.put("/api/users/:id", handlers::update_user)
+    server.delete("/api/users/:id", handlers::delete_user)
+    
+    // Web routes
+    server.get("/", handlers::home)
+    server.get("/about", handlers::about)
+    server.get("/contact", handlers::contact)
+    
+    // Static files
+    server.mount("/static", StaticFiles::new("static"))
+    
+    // Start server
+    match server.start():
+        Ok(_) => 
+            println("Server running at http://localhost:8080")
+            return 0
+        Err(e) => 
+            println("Server error: " + e.to_string())
+            return 1
+
+// ============================================
+// SERVER CONFIGURATION
+// ============================================
+
+struct ServerConfig:
+    host: String
+    port: Int
+    workers: Int
+    timeout: Int
+    cors_enabled: Bool
+
+impl ServerConfig:
+    pub fn new(host: String, port: Int) -> ServerConfig:
+        return ServerConfig {
+            host: host,
+            port: port,
+            workers: 4,
+            timeout: 30000,
+            cors_enabled: true
+        }
+    
+    pub fn with_workers(&mut self, n: Int) -> ServerConfig:
+        self.workers = n
+        return self
+    
+    pub fn with_timeout(&mut self, timeout: Int) -> ServerConfig:
+        self.timeout = timeout
+        return self
+    
+    pub fn with_cors(&mut self, enabled: Bool) -> ServerConfig:
+        self.cors_enabled = enabled
+        return self
+
+// ============================================
+// HTTP SERVER
+// ============================================
+
+struct HttpServer:
+    config: ServerConfig
+    routes: [Route]
+
+impl HttpServer:
+    pub fn new(config: ServerConfig) -> HttpServer:
+        return HttpServer {
+            config: config,
+            routes: []
+        }
+    
+    pub fn get(&mut self, path: String, handler: Fn(Request) -> Response):
+        self.routes.push(Route::new("GET", path, handler))
+    
+    pub fn post(&mut self, path: String, handler: Fn(Request) -> Response):
+        self.routes.push(Route::new("POST", path, handler))
+    
+    pub fn put(&mut self, path: String, handler: Fn(Request) -> Response):
+        self.routes.push(Route::new("PUT", path, handler))
+    
+    pub fn delete(&mut self, path: String, handler: Fn(Request) -> Response):
+        self.routes.push(Route::new("DELETE", path, handler))
+    
+    pub fn mount(&mut self, path: String, handler: StaticFiles):
+        // Mount static file handler
+        ()
+    
+    pub fn start(&self) -> Result<(), Error>:
+        return native_http_server_start(self.config.host, self.config.port, self.routes)
+
+// ============================================
+// ROUTE
+// ============================================
+
+struct Route:
+    method: String
+    path: String
+    handler: Fn(Request) -> Response
+
+impl Route:
+    pub fn new(method: String, path: String, handler: Fn(Request) -> Response) -> Route:
+        return Route {
+            method: method,
+            path: path,
+            handler: handler
+        }
+    
+    pub fn matches(&self, method: String, path: String) -> Bool:
+        return self.method == method && self.path == path
+    
+    pub fn extract_params(&self, path: String) -> HashMap<String, String>:
+        var params = HashMap::new()
+        
+        let path_parts = self.path.split("/")
+        let req_parts = path.split("/")
+        
+        var i = 0
+        for part in path_parts:
+            if part.starts_with(":"):
+                // Extract parameter name
+                let param_name = part[1..]
+                if i < req_parts.len():
+                    params.set(param_name, req_parts[i])
+            i = i + 1
+        
+        return params
+
+// ============================================
+// STATIC FILES
+// ============================================
+
+struct StaticFiles:
+    directory: String
+    cache_enabled: Bool
+    max_age: Int
+
+impl StaticFiles:
+    pub fn new(directory: String) -> StaticFiles:
+        return StaticFiles {
+            directory: directory,
+            cache_enabled: true,
+            max_age: 86400
+        }
+    
+    pub fn with_cache(&mut self, enabled: Bool) -> StaticFiles:
+        self.cache_enabled = enabled
+        return self
+    
+    pub fn with_max_age(&mut self, seconds: Int) -> StaticFiles:
+        self.max_age = seconds
+        return self
+    
+    pub fn serve(&self, path: String) -> Response:
+        let file_path = self.directory + "/" + path
+        
+        if not std::fs::exists(file_path):
+            return Response::not_found()
+        
+        let content = std::fs::read_file(file_path)?
+        
+        let mut response = Response::ok()
+            .with_body(content)
+        
+        // Set content type based on extension
+        let ext = std::fs::extension(file_path)
+        let content_type = match ext:
+            "html" => "text/html"
+            "css" => "text/css"
+            "js" => "application/javascript"
+            "json" => "application/json"
+            "png" => "image/png"
+            "jpg" => "image/jpeg"
+            "svg" => "image/svg+xml"
+            "woff" => "font/woff"
+            "woff2" => "font/woff2"
+            _ => "application/octet-stream"
+        
+        response.headers.set_content_type(content_type)
+        
+        if self.cache_enabled:
+            response.headers.set("Cache-Control", "public, max-age=" + self.max_age.to_string())
+        
+        return response

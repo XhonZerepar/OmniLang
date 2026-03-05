@@ -1,0 +1,310 @@
+# ============================================================
+# OmniLang v2.0 - Full-Stack Todo Application
+# 
+# This single file contains:
+# - Database model (SQLite)
+# - Backend API (REST)
+# - Web server
+# - Frontend UI (React-like)
+# - Real-time updates
+#
+# Compile: python omnilang2.py todo.omni
+# Run: python todo.py
+# ============================================================
+
+# ------------------------------------------------------------
+# DATABASE MODEL - Auto-creates SQLite table
+# ------------------------------------------------------------
+
+model Todo {
+    id: int [pk, auto]
+    title: string
+    done: bool
+    created_at: int
+}
+
+# ------------------------------------------------------------
+# BACKEND STORE - Business logic & database operations
+# ------------------------------------------------------------
+
+store Todos {
+    fn get_all() {
+        return db.query("SELECT * FROM Todo ORDER BY created_at DESC")
+    }
+    
+    fn get_by_id(id: int) {
+        results = db.query("SELECT * FROM Todo WHERE id = ?", id)
+        return results[0] if results else null
+    }
+    
+    fn create(title: string) {
+        todo = {
+            title: title,
+            done: false,
+            created_at: now()
+        }
+        id = db.insert("Todo", todo)
+        return { id: id, ...todo }
+    }
+    
+    fn toggle(id: int) {
+        todo = store.get_by_id(id)
+        if todo {
+            db.update("Todo", { done: !todo.done }, "id = ?", id)
+            return true
+        }
+        return false
+    }
+    
+    fn delete(id: int) {
+        db.delete("Todo", "id = ?", id)
+        return true
+    }
+    
+    fn count() {
+        results = db.query("SELECT COUNT(*) as cnt FROM Todo")
+        return results[0].cnt if results else 0
+    }
+}
+
+# ------------------------------------------------------------
+# API ROUTES - HTTP endpoints
+# ------------------------------------------------------------
+
+route GET /api/todos {
+    fn handler() {
+        return todos.get_all()
+    }
+}
+
+route POST /api/todos {
+    fn handler(request) {
+        title = request.title
+        if not title:
+            return { error: "Title required" }
+        return todos.create(title)
+    }
+}
+
+route PUT /api/todos/:id {
+    fn handler(request) {
+        id = int(request.id)
+        todos.toggle(id)
+        return { success: true }
+    }
+}
+
+route DELETE /api/todos/:id {
+    fn handler(request) {
+        id = int(request.id)
+        todos.delete(id)
+        return { success: true }
+    }
+}
+
+route GET /api/count {
+    fn handler() {
+        return { count: todos.count() }
+    }
+}
+
+# ------------------------------------------------------------
+# FRONTEND VIEW - React-like UI component
+# ------------------------------------------------------------
+
+view App {
+    state items = []
+    state newTodo = ""
+    state loading = true
+    
+    render {
+        div(class="container") {
+            h1 "OmniLang Todo App"
+            p(class="subtitle") "Full-stack in one file!"
+            
+            div(class="input-group") {
+                input(
+                    type="text",
+                    placeholder="What needs to be done?",
+                    value=newTodo,
+                    oninput={ newTodo = event.target.value }
+                )
+                button(onclick={ 
+                    if newTodo.trim():
+                        fetch("/api/todos", {
+                            method: "POST",
+                            body: JSON.stringify({ title: newTodo })
+                        })
+                        newTodo = ""
+                        load_items()
+                }) "Add"
+            }
+            
+            div(class="stats") {
+                span "Total: "
+                span count
+            }
+            
+            ul(class="todo-list") {
+                items.map(item => {
+                    li(class={"done": item.done}) {
+                        input(
+                            type="checkbox",
+                            checked=item.done,
+                            onclick={
+                                fetch("/api/todos/" + item.id, { method: "PUT" })
+                                load_items()
+                            }
+                        )
+                        span item.title
+                        button(class="delete", onclick={
+                            fetch("/api/todos/" + item.id, { method: "DELETE" })
+                            load_items()
+                        }) "×"
+                    }
+                })
+            }
+        }
+    }
+}
+
+# ------------------------------------------------------------
+# STYLES - CSS (embedded in output)
+# ------------------------------------------------------------
+
+style App {
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)
+        min-height: 100vh
+        margin: 0
+        padding: 20px
+    }
+    
+    .container {
+        max-width: 600px
+        margin: 0 auto
+        background: white
+        border-radius: 12px
+        padding: 30px
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3)
+    }
+    
+    h1 {
+        color: #333
+        margin: 0 0 10px 0
+        font-size: 28px
+    }
+    
+    .subtitle {
+        color: #666
+        margin: 0 0 30px 0
+    }
+    
+    .input-group {
+        display: flex
+        gap: 10px
+        margin-bottom: 20px
+    }
+    
+    input[type="text"] {
+        flex: 1
+        padding: 12px 15px
+        border: 2px solid #eee
+        border-radius: 8px
+        font-size: 16px
+        outline: none
+        transition: border-color 0.3s
+    }
+    
+    input[type="text"]:focus {
+        border-color: #667eea
+    }
+    
+    button {
+        padding: 12px 25px
+        background: #667eea
+        color: white
+        border: none
+        border-radius: 8px
+        font-size: 16px
+        cursor: pointer
+        transition: background 0.3s
+    }
+    
+    button:hover {
+        background: #5568d3
+    }
+    
+    .stats {
+        color: #666
+        margin-bottom: 20px
+        font-size: 14px
+    }
+    
+    .todo-list {
+        list-style: none
+        padding: 0
+        margin: 0
+    }
+    
+    .todo-list li {
+        display: flex
+        align-items: center
+        padding: 15px
+        border-bottom: 1px solid #eee
+        transition: background 0.2s
+    }
+    
+    .todo-list li:hover {
+        background: #f9f9f9
+    }
+    
+    .todo-list li.done span {
+        text-decoration: line-through
+        color: #999
+    }
+    
+    .todo-list input[type="checkbox"] {
+        width: 20px
+        height: 20px
+        margin-right: 15px
+        cursor: pointer
+    }
+    
+    .todo-list span {
+        flex: 1
+        font-size: 16px
+        color: #333
+    }
+    
+    .todo-list button.delete {
+        background: #ff4757
+        padding: 8px 15px
+        font-size: 14px
+        opacity: 0
+        transition: opacity 0.2s
+    }
+    
+    .todo-list li:hover button.delete {
+        opacity: 1
+    }
+    
+    .todo-list button.delete:hover {
+        background: #ff6b7a
+    }
+}
+
+# ------------------------------------------------------------
+# AUTO-LOAD - Fetch items on page load
+# ------------------------------------------------------------
+
+fn init() {
+    # This runs automatically on server start
+    load_items()
+}
+
+fn load_items() {
+    items = fetch("/api/todos")
+    loading = false
+}

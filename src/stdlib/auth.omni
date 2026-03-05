@@ -1,0 +1,613 @@
+//! OmniLang Standard Library - Auth Module
+//! 
+//! Provides authentication and security primitives including JWT, sessions, and password hashing.
+
+module std::auth;
+
+import std::web::Serialize;
+import std::web::Deserialize;
+
+/// JWT Token handler
+pub mod jwt {
+    use super::*;
+    
+    /// JWT Token structure
+    pub struct Token {
+        header: JWTHeader,
+        payload: JWTPayload,
+        signature: String,
+    }
+    
+    /// JWT Header
+    pub struct JWTHeader {
+        pub alg: String,  // Algorithm (HS256, RS256, etc.)
+        pub typ: String,  // Type (JWT)
+    }
+    
+    impl JWTHeader {
+        /// Create a new header
+        pub fn new(alg: String) -> JWTHeader {
+            JWTHeader {
+                alg,
+                typ: "JWT".to_string(),
+            }
+        }
+        
+        /// Encode header to base64
+        pub fn encode(&self) -> String {
+            let json = format!(r#"{{"alg":"{}","typ":"{}"}}"#, self.alg, self.typ);
+            base64_url_encode(json.as_bytes())
+        }
+    }
+    
+    /// JWT Payload (claims)
+    pub struct JWTPayload {
+        pub iss: Option<String>,      // Issuer
+        pub sub: Option<String>,      // Subject (user ID)
+        pub aud: Option<String>,      // Audience
+        pub exp: Option<Int>,         // Expiration time (Unix timestamp)
+        pub nbf: Option<Int>,         // Not before
+        pub iat: Option<Int>,         // Issued at
+        pub jti: Option<String>,      // JWT ID
+        pub claims: HashMap<String, String>,  // Custom claims
+    }
+    
+    impl JWTPayload {
+        /// Create a new payload
+        pub fn new() -> JWTPayload {
+            JWTPayload {
+                iss: None,
+                sub: None,
+                aud: None,
+                exp: None,
+                nbf: None,
+                iat: Some(current_timestamp()),
+                jti: None,
+                claims: HashMap::new(),
+            }
+        }
+        
+        /// Set issuer
+        pub fn issuer(mut self, iss: String) -> JWTPayload {
+            self.iss = Some(iss);
+            self
+        }
+        
+        /// Set subject (user ID)
+        pub fn subject(mut self, sub: String) -> JWTPayload {
+            self.sub = Some(sub);
+            self
+        }
+        
+        /// Set audience
+        pub fn audience(mut self, aud: String) -> JWTPayload {
+            self.aud = Some(aud);
+            self
+        }
+        
+        /// Set expiration (seconds from now)
+        pub fn expires_in(mut self, seconds: Int) -> JWTPayload {
+            self.exp = Some(current_timestamp() + seconds);
+            self
+        }
+        
+        /// Set custom claim
+        pub fn claim(mut self, key: String, value: String) -> JWTPayload {
+            self.claims.insert(key, value);
+            self
+        }
+        
+        /// Encode payload to base64
+        pub fn encode(&self) -> String {
+            let mut json = String::from("{");
+            
+            if let Some(iss) = &self.iss {
+                json = json + &format!(r#""iss":"{}","#, iss);
+            }
+            if let Some(sub) = &self.sub {
+                json = json + &format!(r#""sub":"{}","#, sub);
+            }
+            if let Some(aud) = &self.aud {
+                json = json + &format!(r#""aud":"{}","#, aud);
+            }
+            if let Some(exp) = self.exp {
+                json = json + &format!(r#""exp":{},"#, exp);
+            }
+            if let Some(nbf) = self.nbf {
+                json = json + &format!(r#""nbf":{},"#, nbf);
+            }
+            if let Some(iat) = self.iat {
+                json = json + &format!(r#""iat":{},"#, iat);
+            }
+            if let Some(jti) = &self.jti {
+                json = json + &format!(r#""jti":"{}","#, jti);
+            }
+            
+            for (key, value) in &self.claims {
+                json = json + &format!(r#""{}":"{}","#, key, value);
+            }
+            
+            if json.ends_with(',') {
+                json = json[..json.len()-1].to_string();
+            }
+            
+            json = json + "}";
+            base64_url_encode(json.as_bytes())
+        }
+        
+        /// Check if token is expired
+        pub fn is_expired(&self) -> Bool {
+            if let Some(exp) = self.exp {
+                current_timestamp() > exp
+            } else {
+                false
+            }
+        }
+        
+        /// Check if token is not yet valid
+        pub fn is_not_yet_valid(&self) -> Bool {
+            if let Some(nbf) = self.nbf {
+                current_timestamp() < nbf
+            } else {
+                false
+            }
+        }
+    }
+    
+    /// Create a new JWT builder
+    pub fn builder() -> JWTBuilder {
+        JWTBuilder::new()
+    }
+    
+    /// JWT Builder
+    pub struct JWTBuilder {
+        header: JWTHeader,
+        payload: JWTPayload,
+        secret: String,
+    }
+    
+    impl JWTBuilder {
+        fn new() -> JWTBuilder {
+            JWTBuilder {
+                header: JWTHeader::new("HS256".to_string()),
+                payload: JWTPayload::new(),
+                secret: "".to_string(),
+            }
+        }
+        
+        /// Set algorithm
+        pub fn algorithm(mut self, alg: String) -> JWTBuilder {
+            self.header.alg = alg;
+            self
+        }
+        
+        /// Set secret key
+        pub fn secret(mut self, secret: String) -> JWTBuilder {
+            self.secret = secret;
+            self
+        }
+        
+        /// Set issuer
+        pub fn issuer(mut self, iss: String) -> JWTBuilder {
+            self.payload = self.payload.issuer(iss);
+            self
+        }
+        
+        /// Set subject (user ID)
+        pub fn subject(mut self, sub: String) -> JWTBuilder {
+            self.payload = self.payload.subject(sub);
+            self
+        }
+        
+        /// Set audience
+        pub fn audience(mut self, aud: String) -> JWTBuilder {
+            self.payload = self.payload.audience(aud);
+            self
+        }
+        
+        /// Set expiration
+        pub fn expires_in(mut self, seconds: Int) -> JWTBuilder {
+            self.payload = self.payload.expires_in(seconds);
+            self
+        }
+        
+        /// Add custom claim
+        pub fn claim(mut self, key: String, value: String) -> JWTBuilder {
+            self.payload = self.payload.claim(key, value);
+            self
+        }
+        
+        /// Build and sign the token
+        pub fn build(self) -> String {
+            let header_encoded = self.header.encode();
+            let payload_encoded = self.payload.encode();
+            
+            let data = header_encoded.clone() + "." + &payload_encoded;
+            let signature = hmac_sha256(self.secret.as_bytes(), data.as_bytes());
+            let signature_encoded = base64_url_encode(&signature);
+            
+            data + "." + &signature_encoded
+        }
+    }
+    
+    /// Verify a JWT token
+    pub fn verify(token: &str, secret: &str) -> Result<JWTPayload, String> {
+        let parts = token.split('.').collect::<Vec<_>>();
+        if parts.len() != 3 {
+            return Err("Invalid token format".to_string());
+        }
+        
+        // Verify signature
+        let data = parts[0].to_string() + "." + parts[1];
+        let expected_signature = hmac_sha256(secret.as_bytes(), data.as_bytes());
+        let expected_encoded = base64_url_encode(&expected_signature);
+        
+        if parts[2] != expected_encoded {
+            return Err("Invalid signature".to_string());
+        }
+        
+        // Decode payload
+        let payload_json = base64_url_decode(parts[1]);
+        // Parse JSON to payload (simplified)
+        
+        Ok(JWTPayload::new())
+    }
+    
+    /// Decode token without verification (for reading claims)
+    pub fn decode(token: &str) -> Result<JWTPayload, String> {
+        let parts = token.split('.').collect::<Vec<_>>();
+        if parts.len() != 3 {
+            return Err("Invalid token format".to_string());
+        }
+        
+        // Decode payload
+        let _payload_json = base64_url_decode(parts[1]);
+        // Parse JSON to payload (simplified)
+        
+        Ok(JWTPayload::new())
+    }
+    
+    /// Get current Unix timestamp
+    fn current_timestamp() -> Int {
+        // Implementation would get current time
+        0
+    }
+    
+    /// Base64 URL encode
+    fn base64_url_encode(data: &[u8]) -> String {
+        // Simplified base64 URL encoding
+        use std::collections::Vec;
+        let mut encoded = String::new();
+        // Implementation would use proper base64
+        encoded
+    }
+    
+    /// Base64 URL decode
+    fn base64_url_decode(data: &str) -> String {
+        // Simplified base64 URL decoding
+        String::new()
+    }
+    
+    /// HMAC-SHA256
+    fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
+        // Simplified HMAC-SHA256
+        Vec::new()
+    }
+}
+
+/// Password hashing
+pub mod password {
+    /// Hash a password
+    pub fn hash(password: &str) -> String {
+        // Implementation would use bcrypt or argon2
+        // For now, just a placeholder
+        format!("hashed:{}", password)
+    }
+    
+    /// Verify a password
+    pub fn verify(password: &str, hash: &str) -> Bool {
+        // Implementation would verify against stored hash
+        hash == format!("hashed:{}", password)
+    }
+    
+    /// Generate a random salt
+    pub fn generate_salt() -> String {
+        // Implementation would generate cryptographically secure random bytes
+        "salt_".to_string()
+    }
+}
+
+/// Session management
+pub mod session {
+    use super::*;
+    
+    /// Session data
+    pub struct Session {
+        pub id: String,
+        pub user_id: String,
+        pub data: HashMap<String, String>,
+        pub created_at: Int,
+        pub expires_at: Int,
+    }
+    
+    impl Session {
+        /// Create a new session
+        pub fn new(user_id: String, duration_seconds: Int) -> Session {
+            let now = current_timestamp();
+            Session {
+                id: generate_session_id(),
+                user_id,
+                data: HashMap::new(),
+                created_at: now,
+                expires_at: now + duration_seconds,
+            }
+        }
+        
+        /// Check if session is expired
+        pub fn is_expired(&self) -> Bool {
+            current_timestamp() > self.expires_at
+        }
+        
+        /// Extend session
+        pub fn extend(&mut self, duration_seconds: Int) -> () {
+            self.expires_at = current_timestamp() + duration_seconds;
+        }
+        
+        /// Get value from session
+        pub fn get(&self, key: &str) -> Option<&String> {
+            self.data.get(key)
+        }
+        
+        /// Set value in session
+        pub fn set(&mut self, key: String, value: String) -> () {
+            self.data.insert(key, value);
+        }
+        
+        /// Remove value from session
+        pub fn remove(&mut self, key: &str) -> () {
+            self.data.remove(key);
+        }
+    }
+    
+    /// Session store
+    pub struct SessionStore {
+        sessions: HashMap<String, Session>,
+    }
+    
+    impl SessionStore {
+        /// Create a new session store
+        pub fn new() -> SessionStore {
+            SessionStore {
+                sessions: HashMap::new(),
+            }
+        }
+        
+        /// Create a new session
+        pub fn create(&mut self, user_id: String, duration_seconds: Int) -> Session {
+            let session = Session::new(user_id, duration_seconds);
+            self.sessions.insert(session.id.clone(), session.clone());
+            session
+        }
+        
+        /// Get session by ID
+        pub fn get(&self, session_id: &str) -> Option<&Session> {
+            self.sessions.get(session_id)
+        }
+        
+        /// Get mutable session
+        pub fn get_mut(&mut self, session_id: &str) -> Option<&mut Session> {
+            self.sessions.get_mut(session_id)
+        }
+        
+        /// Delete session
+        pub fn delete(&mut self, session_id: &str) -> () {
+            self.sessions.remove(session_id);
+        }
+        
+        /// Clean up expired sessions
+        pub fn cleanup(&mut self) -> Int {
+            let mut removed = 0;
+            let ids: Vec<String> = self.sessions.keys().cloned().collect();
+            for id in ids {
+                if let Some(session) = self.sessions.get(&id) {
+                    if session.is_expired() {
+                        self.sessions.remove(&id);
+                        removed = removed + 1;
+                    }
+                }
+            }
+            removed
+        }
+    }
+    
+    /// Generate session ID
+    fn generate_session_id() -> String {
+        // Implementation would generate cryptographically secure random string
+        "session_".to_string() + &random_string(32)
+    }
+    
+    /// Get current timestamp
+    fn current_timestamp() -> Int {
+        0
+    }
+    
+    /// Generate random string
+    fn random_string(length: Int) -> String {
+        // Implementation would generate random alphanumeric string
+        "random".to_string()
+    }
+}
+
+/// API Key handling
+pub mod api_key {
+    /// Generate API key
+    pub fn generate() -> String {
+        // Implementation would generate secure random key
+        "sk_".to_string() + &random_string(32)
+    }
+    
+    /// Validate API key format
+    pub fn validate(key: &str) -> Bool {
+        key.starts_with("sk_") && key.len() >= 32
+    }
+    
+    /// Extract user ID from API key (in production, this would look up in database)
+    pub fn get_user_id(key: &str) -> Option<String> {
+        if validate(key) {
+            Some("user_id_from_key".to_string())
+        } else {
+            None
+        }
+    }
+    
+    fn random_string(length: Int) -> String {
+        "random".to_string()
+    }
+}
+
+/// OAuth 2.0 helpers
+pub mod oauth {
+    /// OAuth2 config
+    pub struct OAuthConfig {
+        pub client_id: String,
+        pub client_secret: String,
+        pub redirect_uri: String,
+        pub auth_url: String,
+        pub token_url: String,
+        pub scopes: Vec<String>,
+    }
+    
+    impl OAuthConfig {
+        /// Create GitHub OAuth config
+        pub fn github(client_id: String, redirect_uri: String) -> OAuthConfig {
+            OAuthConfig {
+                client_id,
+                client_secret: "".to_string(),
+                redirect_uri,
+                auth_url: "https://github.com/login/oauth/authorize".to_string(),
+                token_url: "https://github.com/login/oauth/access_token".to_string(),
+                scopes: vec!["user:email".to_string(), "read:user".to_string()],
+            }
+        }
+        
+        /// Create Google OAuth config
+        pub fn google(client_id: String, redirect_uri: String) -> OAuthConfig {
+            OAuthConfig {
+                client_id,
+                client_secret: "".to_string(),
+                redirect_uri,
+                auth_url: "https://accounts.google.com/o/oauth2/v2/auth".to_string(),
+                token_url: "https://oauth2.googleapis.com/token".to_string(),
+                scopes: vec!["openid".to_string(), "email".to_string(), "profile".to_string()],
+            }
+        }
+        
+        /// Get authorization URL
+        pub fn auth_url(&self) -> String {
+            let scopes = self.scopes.join(" ");
+            format!("{}?client_id={}&redirect_uri={}&scope={}&response_type=code",
+                self.auth_url, self.client_id, self.redirect_uri, scopes)
+        }
+    }
+    
+    /// Exchange authorization code for tokens
+    pub fn exchange_code(config: &OAuthConfig, code: String) -> Result<TokenResponse, String> {
+        // Implementation would make POST request to token_url
+        Ok(TokenResponse {
+            access_token: "access_token".to_string(),
+            token_type: "Bearer".to_string(),
+            expires_in: 3600,
+            refresh_token: Some("refresh_token".to_string()),
+            scope: config.scopes.join(" "),
+        })
+    }
+    
+    /// Token response
+    pub struct TokenResponse {
+        pub access_token: String,
+        pub token_type: String,
+        pub expires_in: Int,
+        pub refresh_token: Option<String>,
+        pub scope: String,
+    }
+}
+
+/// Role-based access control (RBAC)
+pub mod rbac {
+    /// Permission
+    pub struct Permission {
+        pub resource: String,
+        pub action: String,
+    }
+    
+    impl Permission {
+        /// Create permission
+        pub fn new(resource: String, action: String) -> Permission {
+            Permission { resource, action }
+        }
+        
+        /// Check if has permission
+        pub fn matches(&self, other: &Permission) -> Bool {
+            self.resource == other.resource && self.action == other.action
+        }
+    }
+    
+    /// Role
+    pub struct Role {
+        pub name: String,
+        pub permissions: Vec<Permission>,
+    }
+    
+    impl Role {
+        /// Create role
+        pub fn new(name: String) -> Role {
+            Role {
+                name,
+                permissions: Vec::new(),
+            }
+        }
+        
+        /// Add permission
+        pub fn add_permission(mut self, permission: Permission) -> Role {
+            self.permissions.push(permission);
+            self
+        }
+        
+        /// Check if role has permission
+        pub fn has_permission(&self, permission: &Permission) -> Bool {
+            self.permissions.iter().any(|p| p.matches(permission))
+        }
+    }
+    
+    /// User with roles
+    pub struct User {
+        pub id: String,
+        pub roles: Vec<Role>,
+    }
+    
+    impl User {
+        /// Create user
+        pub fn new(id: String) -> User {
+            User {
+                id,
+                roles: Vec::new(),
+            }
+        }
+        
+        /// Add role
+        pub fn add_role(mut self, role: Role) -> User {
+            self.roles.push(role);
+            self
+        }
+        
+        /// Check if user has permission
+        pub fn has_permission(&self, permission: &Permission) -> Bool {
+            self.roles.iter().any(|r| r.has_permission(permission))
+        }
+    }
+}
+
+// Re-export for convenience
+pub use jwt::*;
+pub use password::*;
+pub use session::*;

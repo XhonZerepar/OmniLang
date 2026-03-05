@@ -1,0 +1,258 @@
+// Example: Foreign Function Interface (FFI)
+// Demonstrates calling C functions from OmniLang
+
+// Import C standard library functions
+extern "C" {
+    // Standard I/O
+    fn printf(format: String, ...) -> Int;
+    fn scanf(format: String, ...) -> Int;
+    fn puts(s: String) -> Int;
+    
+    // Memory management
+    fn malloc(size: usize) -> *Void;
+    fn free(ptr: *Void) -> Void;
+    fn realloc(ptr: *Void, size: usize) -> *Void;
+    
+    // String functions
+    fn strlen(s: String) -> Int;
+    fn strcpy(dest: String, src: String) -> String;
+    fn strcmp(s1: String, s2: String) -> Int;
+    fn strcat(dest: String, src: String) -> String;
+    fn memset(s: String, c: Int, n: usize) -> String;
+    
+    // Math functions
+    fn sqrt(x: Float) -> Float;
+    fn sin(x: Float) -> Float;
+    fn cos(x: Float) -> Float;
+    fn tan(x: Float) -> Float;
+    fn log(x: Float) -> Float;
+    fn exp(x: Float) -> Float;
+    fn pow(x: Float, y: Float) -> Float;
+    fn floor(x: Float) -> Float;
+    fn ceil(x: Float) -> Float;
+    fn fabs(x: Float) -> Float;
+    
+    // File I/O
+    fn fopen(filename: String, mode: String) -> *File;
+    fn fclose(file: *File) -> Int;
+    fn fread(ptr: *Void, size: usize, count: usize, file: *File) -> usize;
+    fn fwrite(ptr: *Void, size: usize, count: usize, file: *File) -> usize;
+    fn fprintf(file: *File, format: String, ...) -> Int;
+    fn fscanf(file: *File, format: String, ...) -> Int;
+    fn fgets(s: String, n: Int, file: *File) -> String;
+    fn feof(file: *File) -> Int;
+    
+    // Process control
+    fn exit(status: Int) -> Void;
+    fn system(command: String) -> Int;
+    fn getenv(name: String) -> String;
+    
+    // Time functions
+    fn time(timer: *Int) -> Int;
+    fn clock() -> Int;
+    
+    // Environment
+    fn getchar() -> Int;
+    fn putchar(c: Int) -> Int;
+}
+
+// C FILE type
+struct File {
+    // Opaque C pointer
+}
+
+// Call C's printf
+fn c_print(message: String) -> Int {
+    unsafe {
+        return printf("%s\n", message);
+    }
+}
+
+// Call C's sqrt
+fn c_sqrt(x: Float) -> Float {
+    unsafe {
+        return sqrt(x);
+    }
+}
+
+// Call C's sin
+fn c_sin(x: Float) -> Float {
+    unsafe {
+        return sin(x);
+    }
+}
+
+// Call C's cos
+fn c_cos(x: Float) -> Float {
+    unsafe {
+        return cos(x);
+    }
+}
+
+// Call C's pow
+fn c_pow(base: Float, exp: Float) -> Float {
+    unsafe {
+        return pow(base, exp);
+    }
+}
+
+// Allocate C memory
+fn c_malloc(size: Int) -> *Void {
+    unsafe {
+        return malloc(size as usize);
+    }
+}
+
+// Free C memory
+fn c_free(ptr: *Void) -> Void {
+    unsafe {
+        return free(ptr);
+    }
+}
+
+// Read from file using C
+fn read_file_c(filename: String) -> String {
+    let file = unsafe { fopen(filename, "r") };
+    
+    if file == null() {
+        return "";
+    }
+    
+    let content = String::new();
+    let buffer = c_malloc(1024) as *Char;
+    
+    while true {
+        let line = unsafe { fgets(buffer, 1024, file) };
+        if line == null() || unsafe { feof(file) } {
+            break;
+        }
+        content.push_str(line);
+    }
+    
+    unsafe { fclose(file) };
+    c_free(buffer as *Void);
+    
+    return content;
+}
+
+// Write to file using C
+fn write_file_c(filename: String, content: String) -> Bool {
+    let file = unsafe { fopen(filename, "w") };
+    
+    if file == null() {
+        return false;
+    }
+    
+    unsafe { fprintf(file, "%s", content) };
+    unsafe { fclose(file) };
+    
+    return true;
+}
+
+// Call system command
+fn system_command(command: String) -> Int {
+    unsafe {
+        return system(command);
+    }
+}
+
+// Example: Using C math functions
+fn calculate_circle_area(radius: Float) -> Float {
+    let pi = 3.14159265359;
+    return pi * c_pow(radius, 2.0);
+}
+
+// Example: Using C string functions
+fn string_length(s: String) -> Int {
+    unsafe {
+        return strlen(s);
+    }
+}
+
+fn string_concat(s1: String, s2: String) -> String {
+    let result = s1 + s2;
+    return result;
+}
+
+// Example: External library binding
+extern "libm" {
+    // Additional math functions from libm
+    fn asin(x: Float) -> Float;
+    fn acos(x: Float) -> Float;
+    fn atan(x: Float) -> Float;
+    fn sinh(x: Float) -> Float;
+    fn cosh(x: Float) -> Float;
+    fn tanh(x: Float) -> Float;
+}
+
+// Unsafe block example
+unsafe fn dangerous_operation() -> Int {
+    let ptr = c_malloc(100);
+    // Do something with pointer
+    c_free(ptr);
+    return 0;
+}
+
+// Callback example - passing OmniLang function to C
+type CCallback = fn(Int) -> Int;
+
+extern "C" {
+    fn qsort(base: *Void, nmemb: usize, size: usize, compar: *CVoid) -> Void;
+}
+
+fn sort_array(arr: [Int], compare: Fn(Int, Int) -> Int) -> [Int] {
+    // Sort array using C's qsort
+    // Would need to wrap the compare function
+    return arr;
+}
+
+// Main function
+fn main(args: [String]) -> Int {
+    println("=== FFI Demo ===");
+
+    // Test C printf
+    println("Using C printf:");
+    unsafe {
+        printf("  Hello from C!\n");
+    }
+
+    // Test C math functions
+    let x: Float = 16.0;
+    let sqrt_x = c_sqrt(x);
+    println("sqrt(" + x + ") = " + sqrt_x);
+
+    let angle: Float = 3.14159 / 2.0;
+    println("sin(" + angle + ") = " + c_sin(angle));
+    println("cos(" + angle + ") = " + c_cos(angle));
+
+    // Test pow
+    println("pow(2.0, 10.0) = " + c_pow(2.0, 10.0));
+
+    // Test circle area calculation
+    let radius: Float = 5.0;
+    let area = calculate_circle_area(radius);
+    println("Circle area (r=" + radius + ") = " + area);
+
+    // Test string length
+    let s = "Hello, World!";
+    println("strlen(\"" + s + "\") = " + string_length(s));
+
+    // Test file operations
+    let filename = "test_output.txt";
+    let content = "This is a test file written from OmniLang!\n";
+    let success = write_file_c(filename, content);
+    if success {
+        println("Successfully wrote to " + filename);
+    }
+
+    // Test system command
+    let result = system_command("echo 'Hello from shell!'");
+    println("System command result: " + result);
+
+    // Test unsafe operation
+    let result = unsafe { dangerous_operation() };
+    println("Dangerous operation result: " + result);
+
+    println("=== Demo Complete ===");
+    return 0;
+}

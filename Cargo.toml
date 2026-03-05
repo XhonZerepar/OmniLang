@@ -1,0 +1,73 @@
+# OmniLang v0.2 - The Ultimate Programming Language
+# 
+[package]
+name = "omnilang"
+version = "0.2.0"
+edition = "2021"
+description = "OmniLang - A unified programming language for all purposes"
+authors = ["OmniLang Team"]
+license = "MIT"
+
+[dependencies]
+# Core
+clap = "4.4"
+inkwell = { version = "0.2", features = ["llvm15-0"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Logging
+log = "0.4"
+env_logger = "0.10"
+
+# Text processing
+regex = "1.10"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# File system
+tempfile = "3.8"
+walkdir = "2.4"
+dirs = "5.0"
+
+# Async (for LSP) - use minimal features
+tokio = { version = "1.35", features = ["rt-multi-thread", "sync"] }
+
+# UUID (for LSP) - use minimal features
+uuid = { version = "1.6", features = ["v4"] }
+
+[lib]
+name = "omnilang"
+path = "src/lib.rs"
+
+[[bin]]
+name = "omc"
+path = "src/main.rs"
+
+[[bin]]
+name = "omlsp"
+path = "src/lsp_main.rs"
+
+[[bin]]
+name = "omp"
+path = "src/omp_main.rs"
+
+[features]
+default = ["llvm15-0"]
+llvm14-0 = ["inkwell/llvm14-0"]
+llvm15-0 = ["inkwell/llvm15-0"]
+llvm16-0 = ["inkwell/llvm16-0"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+overflow-checks = false
+
+[profile.bench]
+inherits = "release"
+debug = true

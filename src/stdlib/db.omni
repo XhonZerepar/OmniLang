@@ -1,0 +1,517 @@
+//! OmniLang Standard Library - Database Module
+//! 
+//! Provides database connectivity and ORM-lite primitives for data persistence.
+//! Uses SQLite as the default embedded database.
+
+module std::db;
+
+import std::web::Serialize;
+import std::web::Deserialize;
+
+/// Database connection
+pub struct Database {
+    path: String,
+    connected: Bool,
+}
+
+impl Database {
+    /// Open a database connection
+    pub fn open(path: String) -> Result<Database, String> {
+        // Implementation uses SQLite FFI
+        Ok(Database {
+            path,
+            connected: true,
+        })
+    }
+    
+    /// Close the database connection
+    pub fn close(&self) -> () {
+        // Implementation closes SQLite connection
+    }
+    
+    /// Execute a SQL statement
+    pub fn execute(&self, sql: String) -> Result<Int, String> {
+        // Implementation executes SQL
+        Ok(0)
+    }
+    
+    /// Execute a SQL statement with parameters
+    pub fn execute_with_params(&self, sql: String, params: Vec<SQLValue>) -> Result<Int, String> {
+        // Implementation executes SQL with params
+        Ok(0)
+    }
+    
+    /// Query data
+    pub fn query(&self, sql: String) -> Result<Rows, String> {
+        // Implementation executes SELECT
+        Ok(Rows { rows: Vec::new() })
+    }
+    
+    /// Query data with parameters
+    pub fn query_with_params(&self, sql: String, params: Vec<SQLValue>) -> Result<Rows, String> {
+        // Implementation executes SELECT with params
+        Ok(Rows { rows: Vec::new() })
+    }
+    
+    /// Begin a transaction
+    pub fn begin(&self) -> Result<Transaction, String> {
+        // Implementation starts transaction
+        Ok(Transaction { db: self })
+    }
+    
+    /// Check if connected
+    pub fn is_connected(&self) -> Bool {
+        self.connected
+    }
+}
+
+/// Transaction for atomic operations
+pub struct Transaction {
+    db: &Database,
+}
+
+impl Transaction {
+    /// Commit the transaction
+    pub fn commit(&self) -> Result<(), String> {
+        // Implementation commits
+        Ok(())
+    }
+    
+    /// Rollback the transaction
+    pub fn rollback(&self) -> Result<(), String> {
+        // Implementation rolls back
+        Ok(())
+    }
+    
+    /// Execute within transaction
+    pub fn with_transaction<F: Fn() -> R, R>(db: &Database, f: F) -> Result<R, String> {
+        let tx = db.begin()?;
+        let result = f();
+        tx.commit()?;
+        Ok(result)
+    }
+}
+
+/// Query result rows
+pub struct Rows {
+    rows: Vec<Row>,
+}
+
+impl Rows {
+    /// Get number of rows
+    pub fn len(&self) -> Int {
+        self.rows.len()
+    }
+    
+    /// Check if empty
+    pub fn is_empty(&self) -> Bool {
+        self.rows.is_empty()
+    }
+    
+    /// Get row at index
+    pub fn get(&self, index: Int) -> Option<&Row> {
+        self.rows.get(index)
+    }
+    
+    /// Iterate over rows
+    pub fn iter(&self) -> &Vec<Row> {
+        &self.rows
+    }
+    
+    /// Convert to vector of structs
+    pub fn collect<T: FromRow>(&self) -> Vec<T> {
+        self.rows.iter()
+            .filter_map(|row| T::from_row(row))
+            .collect()
+    }
+}
+
+/// Single row from query
+pub struct Row {
+    columns: Vec<String>,
+    values: Vec<SQLValue>,
+}
+
+impl Row {
+    /// Get value by column index
+    pub fn get(&self, index: Int) -> Option<&SQLValue> {
+        self.values.get(index)
+    }
+    
+    /// Get value by column name
+    pub fn get_by_name(&self, name: &str) -> Option<&SQLValue> {
+        self.columns.iter()
+            .position(|c| c == name)
+            .and_then(|i| self.values.get(i))
+    }
+    
+    /// Get integer value
+    pub fn get_int(&self, index: Int) -> Option<Int> {
+        match self.get(index) {
+            Some(SQLValue::Int(n)) => Some(*n),
+            _ => None,
+        }
+    }
+    
+    /// Get string value
+    pub fn get_string(&self, index: Int) -> Option<String> {
+        match self.get(index) {
+            Some(SQLValue::String(s)) => Some(s.clone()),
+            _ => None,
+        }
+    }
+    
+    /// Get float value
+    pub fn get_float(&self, index: Int) -> Option<Float> {
+        match self.get(index) {
+            Some(SQLValue::Float(f)) => Some(*f),
+            _ => None,
+        }
+    }
+    
+    /// Get boolean value
+    pub fn get_bool(&self, index: Int) -> Option<Bool> {
+        match self.get(index) {
+            Some(SQLValue::Bool(b)) => Some(*b),
+            _ => None,
+        }
+    }
+    
+    /// Get blob value
+    pub fn get_blob(&self, index: Int) -> Option<&Vec<u8>> {
+        match self.get(index) {
+            Some(SQLValue::Blob(b)) => Some(b),
+            _ => None,
+        }
+    }
+}
+
+/// SQL value representation
+pub enum SQLValue {
+    Null,
+    Int(Int),
+    Float(Float),
+    String(String),
+    Bool(Bool),
+    Blob(Vec<u8>),
+}
+
+impl SQLValue {
+    /// Convert from string
+    pub fn from_string(s: &str) -> SQLValue {
+        SQLValue::String(s.to_string())
+    }
+    
+    /// Convert to string for SQL
+    pub fn to_sql(&self) -> String {
+        match self {
+            SQLValue::Null => "NULL".to_string(),
+            SQLValue::Int(n) => n.to_string(),
+            SQLValue::Float(f) => f.to_string(),
+            SQLValue::String(s) => format!("'{}'", s.replace("'", "''")),
+            SQLValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
+            SQLValue::Blob(b) => format!("X'{}'", b.iter().map(|b| format!("{:02x}", b)).collect::<String>()),
+        }
+    }
+}
+
+/// Trait for converting row to struct
+pub trait FromRow: Sized {
+    fn from_row(row: &Row) -> Option<Self>;
+}
+
+/// Simple key-value store
+pub struct Store {
+    db: Database,
+}
+
+impl Store {
+    /// Open a store
+    pub fn open(path: String) -> Result<Store, String> {
+        let db = Database::open(path)?;
+        // Create tables if not exist
+        db.execute("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY, value TEXT)")?;
+        Ok(Store { db })
+    }
+    
+    /// Get a value
+    pub fn get(&self, key: &str) -> Option<String> {
+        let result = self.db.query("SELECT value FROM store WHERE key = ?".to_string());
+        match result {
+            Ok(rows) => {
+                if let Some(row) = rows.get(0) {
+                    row.get_string(0)
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        }
+    }
+    
+    /// Set a value
+    pub fn set(&self, key: String, value: String) -> Result<(), String> {
+        self.db.execute(format!(
+            "INSERT OR REPLACE INTO store (key, value) VALUES ('{}', '{}')",
+            key.replace("'", "''"),
+            value.replace("'", "''")
+        ))
+    }
+    
+    /// Delete a value
+    pub fn delete(&self, key: &str) -> Result<(), String> {
+        self.db.execute(format!("DELETE FROM store WHERE key = '{}'", key.replace("'", "''")))
+    }
+    
+    /// Check if key exists
+    pub fn contains(&self, key: &str) -> Bool {
+        self.get(key).is_some()
+    }
+    
+    /// Get all keys
+    pub fn keys(&self) -> Vec<String> {
+        let result = self.db.query("SELECT key FROM store".to_string());
+        match result {
+            Ok(rows) => rows.iter()
+                .filter_map(|row| row.get_string(0))
+                .collect(),
+            Err(_) => Vec::new(),
+        }
+    }
+    
+    /// Clear all values
+    pub fn clear(&self) -> Result<(), String> {
+        self.db.execute("DELETE FROM store".to_string())
+    }
+    
+    /// Get number of entries
+    pub fn len(&self) -> Int {
+        let result = self.db.query("SELECT COUNT(*) FROM store".to_string());
+        match result {
+            Ok(rows) => rows.get(0).and_then(|r| r.get_int(0)).unwrap_or(0),
+            Err(_) => 0,
+        }
+    }
+}
+
+/// SQL query builder
+pub mod query {
+    use super::*;
+    
+    /// Select query builder
+    pub struct SelectQuery {
+        table: String,
+        columns: Vec<String>,
+        conditions: Vec<String>,
+        order_by: Option<(String, Order)>,
+        limit_count: Option<Int>,
+        offset_count: Option<Int>,
+    }
+    
+    impl SelectQuery {
+        /// Create a new select query
+        pub fn new(table: String) -> SelectQuery {
+            SelectQuery {
+                table,
+                columns: vec!["*".to_string()],
+                conditions: Vec::new(),
+                order_by: None,
+                limit_count: None,
+                offset_count: None,
+            }
+        }
+        
+        /// Select specific columns
+        pub fn select(mut self, columns: Vec<String>) -> SelectQuery {
+            self.columns = columns;
+            self
+        }
+        
+        /// Add where condition
+        pub fn where_condition(mut self, condition: String) -> SelectQuery {
+            self.conditions.push(condition);
+            self
+        }
+        
+        /// Order by column
+        pub fn order_by(mut self, column: String, order: Order) -> SelectQuery {
+            self.order_by = Some((column, order));
+            self
+        }
+        
+        /// Limit results
+        pub fn limit(mut self, count: Int) -> SelectQuery {
+            self.limit_count = Some(count);
+            self
+        }
+        
+        /// Offset results
+        pub fn offset(mut self, count: Int) -> SelectQuery {
+            self.offset_count = Some(count);
+            self
+        }
+        
+        /// Build SQL string
+        pub fn build(&self) -> String {
+            let mut sql = "SELECT ".to_string();
+            sql = sql + &self.columns.join(", ");
+            sql = sql + " FROM " + &self.table;
+            
+            if !self.conditions.is_empty() {
+                sql = sql + " WHERE " + &self.conditions.join(" AND ");
+            }
+            
+            if let Some((col, order)) = &self.order_by {
+                sql = sql + " ORDER BY " + col + " " + &order.to_string();
+            }
+            
+            if let Some(limit) = self.limit_count {
+                sql = sql + " LIMIT " + &limit.to_string();
+            }
+            
+            if let Some(offset) = self.offset_count {
+                sql = sql + " OFFSET " + &offset.to_string();
+            }
+            
+            sql
+        }
+    }
+    
+    /// Order direction
+    pub enum Order {
+        Asc,
+        Desc,
+    }
+    
+    impl Order {
+        fn to_string(&self) -> String {
+            match self {
+                Order::Asc => "ASC".to_string(),
+                Order::Desc => "DESC".to_string(),
+            }
+        }
+    }
+    
+    /// Insert query builder
+    pub struct InsertQuery {
+        table: String,
+        values: Vec<(String, SQLValue)>,
+    }
+    
+    impl InsertQuery {
+        /// Create a new insert query
+        pub fn new(table: String) -> InsertQuery {
+            InsertQuery {
+                table,
+                values: Vec::new(),
+            }
+        }
+        
+        /// Add value
+        pub fn value(mut self, column: String, value: SQLValue) -> InsertQuery {
+            self.values.push((column, value));
+            self
+        }
+        
+        /// Build SQL string
+        pub fn build(&self) -> String {
+            let columns = self.values.iter().map(|(c, _)| c.clone()).collect::<Vec<_>>().join(", ");
+            let values = self.values.iter().map(|(_, v)| v.to_sql()).collect::<Vec<_>>().join(", ");
+            format!("INSERT INTO {} ({}) VALUES ({})", self.table, columns, values)
+        }
+    }
+    
+    /// Update query builder
+    pub struct UpdateQuery {
+        table: String,
+        values: Vec<(String, SQLValue)>,
+        conditions: Vec<String>,
+    }
+    
+    impl UpdateQuery {
+        /// Create a new update query
+        pub fn new(table: String) -> UpdateQuery {
+            UpdateQuery {
+                table,
+                values: Vec::new(),
+                conditions: Vec::new(),
+            }
+        }
+        
+        /// Set value
+        pub fn set(mut self, column: String, value: SQLValue) -> UpdateQuery {
+            self.values.push((column, value));
+            self
+        }
+        
+        /// Add where condition
+        pub fn where_condition(mut self, condition: String) -> UpdateQuery {
+            self.conditions.push(condition);
+            self
+        }
+        
+        /// Build SQL string
+        pub fn build(&self) -> String {
+            let set_clause = self.values.iter()
+                .map(|(c, v)| format!("{} = {}", c, v.to_sql()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            
+            let mut sql = format!("UPDATE {} SET {}", self.table, set_clause);
+            
+            if !self.conditions.is_empty() {
+                sql = sql + " WHERE " + &self.conditions.join(" AND ");
+            }
+            
+            sql
+        }
+    }
+    
+    /// Delete query builder
+    pub struct DeleteQuery {
+        table: String,
+        conditions: Vec<String>,
+    }
+    
+    impl DeleteQuery {
+        /// Create a new delete query
+        pub fn new(table: String) -> DeleteQuery {
+            DeleteQuery {
+                table,
+                conditions: Vec::new(),
+            }
+        }
+        
+        /// Add where condition
+        pub fn where_condition(mut self, condition: String) -> DeleteQuery {
+            self.conditions.push(condition);
+            self
+        }
+        
+        /// Build SQL string
+        pub fn build(&self) -> String {
+            let mut sql = "DELETE FROM ".to_string() + &self.table;
+            
+            if !self.conditions.is_empty() {
+                sql = sql + " WHERE " + &self.conditions.join(" AND ");
+            }
+            
+            sql
+        }
+    }
+}
+
+/// Convenience functions
+pub mod convenience {
+    use super::*;
+    
+    /// Open SQLite database
+    pub fn sqlite(path: String) -> Result<Database, String> {
+        Database::open(path)
+    }
+    
+    /// Open in-memory database
+    pub fn memory() -> Result<Database, String> {
+        Database::open(":memory:".to_string())
+    }
+}

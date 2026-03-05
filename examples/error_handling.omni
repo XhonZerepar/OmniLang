@@ -1,0 +1,61 @@
+// Error Handling in OmniLang
+// Demonstrates Option, Result, and error propagation
+
+// Safe division returning Option
+fn safe_divide(a: Int, b: Int) -> Option[Int]:
+    if b == 0:
+        return None
+    return Some(a / b)
+
+// Parse integer with error details
+fn parse_int(s: String) -> Result[Int, String]:
+    if s.len() == 0:
+        return Result.Err("Empty string")
+    
+    // Try parsing
+    let chars = s.chars()
+    let negative = chars[0] == '-'
+    let start = if negative then 1 else 0
+    
+    let value = 0
+    for i in start..s.len():
+        let c = chars[i]
+        if c < '0' or c > '9':
+            return Result.Err("Invalid character: " + c)
+        value = value * 10 + (c - '0')
+    
+    return Result.Ok(if negative then -value else value)
+
+// Complex calculation with error propagation
+fn calculate(a: String, b: String) -> Result[Int, String]:
+    let x = try parse_int(a)?
+    let y = try parse_int(b)?
+    
+    let div = try safe_divide(x, y)?
+    
+    return Result.Ok(div * 2)
+
+fn main(args: [String]) -> Int:
+    // Using Option
+    let result = safe_divide(10, 2)
+    match result:
+        Some(value) => println("Division result: " + value)
+        None => println("Division failed")
+    
+    // Using Result
+    let parsed = parse_int("42")
+    match parsed:
+        Ok(value) => println("Parsed: " + value)
+        Err(error) => println("Parse error: " + error)
+    
+    // Error propagation with ?
+    let calc = calculate("10", "2")
+    match calc:
+        Ok(value) => println("Calculation: " + value)
+        Err(error) => println("Error: " + error)
+    
+    // Try with default value
+    let value = parse_int("invalid").unwrap_or(0)
+    println("With default: " + value)
+    
+    return 0

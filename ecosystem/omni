@@ -1,0 +1,695 @@
+#!/usr/bin/env python3
+"""
+OmniLang Ecosystem - Unified CLI Tool
+A single entry point for all OmniLang development tasks.
+"""
+
+import argparse
+import subprocess
+import sys
+import os
+import shutil
+import toml
+import json
+from pathlib import Path
+from typing import Optional, List
+import urllib.request
+import tarfile
+import hashlib
+
+# ANSI color codes
+class Colors:
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    RED = '\033[91m'
+    RESET = '\033[0m'
+    BOLD = '\033[1m'
+
+def log_info(msg: str):
+    print(f"{Colors.BLUE}info:{Colors.RESET} {msg}")
+
+def log_success(msg: str):
+    print(f"{Colors.GREEN}success:{Colors.RESET} {msg}")
+
+def log_warn(msg: str):
+    print(f"{Colors.YELLOW}warning:{Colors.RESET} {msg}")
+
+def log_error(msg: str):
+    print(f"{Colors.RED}error:{Colors.RESET} {msg}")
+
+class OmniCLI:
+    """Unified OmniLang CLI tool."""
+    
+    def __init__(self):
+        self.home_dir = Path.home() / ".omni"
+        self.cache_dir = self.home_dir / "cache"
+        self.config_dir = self.home_dir / "config"
+        self.bin_dir = self.home_dir / "bin"
+        self.lib_dir = self.home_dir / "lib"
+        
+        # Ensure directories exist
+        self.home_dir.mkdir(parents=True, exist_ok=True)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.bin_dir.mkdir(parents=True, exist_ok=True)
+        self.lib_dir.mkdir(parents=True, exist_ok=True)
+    
+    def find_omnic(self) -> Optional[Path]:
+        """Locate the OmniLang compiler."""
+        # Check in project directory
+        project_omnic = Path(__file__).parent / "omc"
+        if project_omnic.exists():
+            return project_omnic
+        
+        # Check in PATH
+        omc_path = shutil.which("omc")
+        if omc_path:
+            return Path(omc_path)
+        
+        # Check in omni bin
+        omni_bin = self.bin_dir / "omc"
+        if omni_bin.exists():
+            return omni_bin
+        
+        return None
+    
+    def run_command(self, cmd: List[str], cwd: Optional[Path] = None) -> int:
+        """Run a command and return exit code."""
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=cwd,
+                check=False,
+                capture_output=False
+            )
+            return result.returncode
+        except FileNotFoundError:
+            log_error(f"Command not found: {cmd[0]}")
+            return 1
+    
+    def cmd_init(self, args):
+        """Initialize a new OmniLang project."""
+        project_name = args.name or "omni-project"
+        template = args.template or "basic"
+        
+        # Create project directory
+        project_path = Path(project_name)
+        if project_path.exists() and any(project_path.iterdir()):
+            log_error(f"Directory '{project_name}' already exists and is not empty")
+            return 1
+        
+        project_path.mkdir(parents=True, exist_ok=True)
+        
+        # Create directory structure
+        (project_path / "src").mkdir(exist_ok=True)
+        (project_path / "tests").mkdir(exist_ok=True)
+        (project_path / "docs").mkdir(exist_ok=True)
+        (project_path / "examples").mkdir(exist_ok=True)
+        
+        # Create omni.toml
+        omni_toml = {
+            "package": {
+                "name": project_name,
+                "version": "0.1.0",
+                "edition": "2024",
+                "authors": [os.environ.get("USER", "Anonymous")],
+                "description": f"A new OmniLang project: {project_name}"
+            },
+            "dependencies": {},
+            "dev-dependencies": {},
+            "build": {
+                "target": "native",
+                "optimization": "default"
+            }
+        }
+        
+        with open(project_path / "omni.toml", "w") as f:
+            toml.dump(omni_toml, f)
+        
+        # Create main source file
+        main_content = """// OmniLang Project: {name}
+// Created with OmniLang CLI
+
+fn main(args: [String]) -> Int:
+    println("Hello from {name}!")
+    println("Welcome to OmniLang v0.2.0")
+    return 0
+""".format(name=project_name)
+        
+        with open(project_path / "src" / "main.omni", "w") as f:
+            f.write(main_content)
+        
+        # Create test file template
+        test_content = """// Tests for {name}
+
+#[test]
+fn test_basic():
+    let x = 42
+    assert_eq(x, 42)
+    
+#[test]
+fn test_string():
+    let greeting = "Hello, OmniLang!"
+    assert_ne(greeting, "")
+""".format(name=project_name)
+        
+        with open(project_path / "tests" / "main_test.omni", "w") as f:
+            f.write(test_content)
+        
+        # Create README
+        readme_content = f"""# {project_name}
+
+An OmniLang project.
+
+## Building
+
+```bash
+omni build
+```
+
+## Running
+
+```bash
+omni run
+```
+
+## Testing
+
+```bash
+omni test
+```
+"""
+        
+        with open(project_path / "README.md", "w") as f:
+            f.write(readme_content)
+        
+        log_success(f"Created project '{project_name}'")
+        log_info(f"  - omni.toml (project configuration)")
+        log_info(f"  - src/main.omni (main entry point)")
+        log_info(f"  - tests/main_test.omni (test file)")
+        log_info(f"  - README.md (documentation)")
+        
+        return 0
+    
+    def cmd_build(self, args):
+        """Build an OmniLang project."""
+        # Find omni.toml in current or parent directory
+        project_path = Path(".")
+        omni_toml_path = None
+        
+        for path in [project_path] + list(project_path.parents):
+            if (path / "omni.toml").exists():
+                omni_toml_path = path / "omni.toml"
+                project_path = path
+                break
+        
+        if not omni_toml_path:
+            log_error("No omni.toml found. Run 'omni init' first.")
+            return 1
+        
+        log_info(f"Building project in {project_path}")
+        
+        # Find compiler
+        omnic = self.find_omnic()
+        if not omnic:
+            log_error("OmniLang compiler (omc) not found.")
+            log_info("Please ensure omc is in your PATH or in the project directory.")
+            return 1
+        
+        # Parse project config
+        with open(omni_toml_path) as f:
+            config = toml.load(f)
+        
+        # Determine output directory
+        output_dir = project_path / "target" / "debug"
+        if args.release:
+            output_dir = project_path / "target" / "release"
+        
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Build command
+        build_cmd = [str(omnic), "build", str(project_path / "src" / "main.omni")]
+        
+        if args.release:
+            build_cmd.append("--release")
+        
+        if args.target:
+            build_cmd.extend(["--target", args.target])
+        
+        log_info(f"Running: {' '.join(build_cmd)}")
+        
+        return self.run_command(build_cmd, cwd=project_path)
+    
+    def cmd_run(self, args):
+        """Run an OmniLang project."""
+        # Build first
+        build_args = argparse.Namespace(release=args.release, target=args.target, watch=False)
+        result = self.cmd_build(build_args)
+        
+        if result != 0:
+            return result
+        
+        # Find the built executable
+        project_path = Path(".")
+        for path in [project_path] + list(project_path.parents):
+            if (path / "omni.toml").exists():
+                project_path = path
+                break
+        
+        # Look for executable
+        release = "release" if args.release else "debug"
+        exe_path = project_path / "target" / release / "main"
+        
+        if not exe_path.exists():
+            # Try with .exe on Windows
+            exe_path = project_path / "target" / release / "main.exe"
+        
+        if not exe_path.exists():
+            log_error("Build succeeded but executable not found")
+            return 1
+        
+        log_info(f"Running {exe_path}")
+        
+        # Run the executable
+        return self.run_command([str(exe_path)] + args.args)
+    
+    def cmd_test(self, args):
+        """Run tests for an OmniLang project."""
+        project_path = Path(".")
+        for path in [project_path] + list(project_path.parents):
+            if (path / "omni.toml").exists():
+                project_path = path
+                break
+        
+        test_dir = project_path / "tests"
+        if not test_dir.exists():
+            log_warn("No tests directory found")
+            return 0
+        
+        log_info("Running tests...")
+        
+        # Find all test files
+        test_files = list(test_dir.glob("*_test.omni"))
+        
+        if not test_files:
+            log_warn("No test files found")
+            return 0
+        
+        omnic = self.find_omnic()
+        if not omnic:
+            log_error("OmniLang compiler (omc) not found.")
+            return 1
+        
+        all_passed = True
+        
+        for test_file in test_files:
+            log_info(f"Testing {test_file.name}...")
+            
+            # Compile with test flag
+            test_cmd = [str(omnic), "test", str(test_file)]
+            result = self.run_command(test_cmd, cwd=project_path)
+            
+            if result != 0:
+                all_passed = False
+                log_error(f"Test failed: {test_file.name}")
+            else:
+                log_success(f"Test passed: {test_file.name}")
+        
+        if all_passed:
+            log_success("All tests passed!")
+            return 0
+        else:
+            log_error("Some tests failed")
+            return 1
+    
+    def cmd_fmt(self, args):
+        """Format OmniLang source code."""
+        files = args.files
+        
+        if not files:
+            # Format all .omni files in src and tests
+            files = []
+            for pattern in ["src/**/*.omni", "tests/**/*.omni", "examples/**/*.omni"]:
+                files.extend(Path(".").glob(pattern))
+            files = [str(f) for f in files]
+        
+        if not files:
+            log_warn("No files to format")
+            return 0
+        
+        omnic = self.find_omnic()
+        if not omnic:
+            log_error("OmniLang compiler (omc) not found.")
+            return 1
+        
+        log_info(f"Formatting {len(files)} file(s)...")
+        
+        fmt_cmd = [str(omnic), "format"] + files
+        return self.run_command(fmt_cmd)
+    
+    def cmd_doc(self, args):
+        """Generate documentation for an OmniLang project."""
+        project_path = Path(".")
+        for path in [project_path] + list(project_path.parents):
+            if (path / "omni.toml").exists():
+                project_path = path
+                break
+        
+        log_info("Generating documentation...")
+        
+        # Create docs directory
+        docs_dir = project_path / "target" / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        
+        omnic = self.find_omnic()
+        if not omnic:
+            log_error("OmniLang compiler (omc) not found.")
+            return 1
+        
+        # Generate docs
+        doc_cmd = [str(omnic), "doc", str(project_path / "src")]
+        
+        result = self.run_command(doc_cmd, cwd=project_path)
+        
+        if result == 0:
+            log_success(f"Documentation generated in {docs_dir}")
+        
+        return result
+    
+    def cmd_install(self, args):
+        """Install a dependency."""
+        package = args.package
+        
+        if not package:
+            log_error("Package name required")
+            return 1
+        
+        # Parse package specification (name@version or git URL)
+        if "@" in package:
+            pkg_name, pkg_version = package.split("@", 1)
+        else:
+            pkg_name = package
+            pkg_version = "latest"
+        
+        # Find omni.toml
+        project_path = Path(".")
+        for path in [project_path] + list(project_path.parents):
+            if (path / "omni.toml").exists():
+                project_path = path
+                break
+        
+        omni_toml_path = project_path / "omni.toml"
+        if not omni_toml_path.exists():
+            log_error("No omni.toml found. Run 'omni init' first.")
+            return 1
+        
+        # Load config
+        with open(omni_toml_path) as f:
+            config = toml.load(f)
+        
+        # Check if already installed
+        if pkg_name in config.get("dependencies", {}):
+            log_warn(f"Package '{pkg_name}' already installed")
+            return 0
+        
+        # Add to dependencies
+        if "dependencies" not in config:
+            config["dependencies"] = {}
+        
+        config["dependencies"][pkg_name] = pkg_version
+        
+        # Save config
+        with open(omni_toml_path, "w") as f:
+            toml.dump(config, f)
+        
+        log_success(f"Added dependency: {package}")
+        log_info("Run 'omni update' to download dependencies")
+        
+        return 0
+    
+    def cmd_remove(self, args):
+        """Remove a dependency."""
+        package = args.package
+        
+        if not package:
+            log_error("Package name required")
+            return 1
+        
+        # Find omni.toml
+        project_path = Path(".")
+        for path in [project_path] + list(project_path.parents):
+            if (path / "omni.toml").exists():
+                project_path = path
+                break
+        
+        omni_toml_path = project_path / "omni.toml"
+        if not omni_toml_path.exists():
+            log_error("No omni.toml found.")
+            return 1
+        
+        # Load config
+        with open(omni_toml_path) as f:
+            config = toml.load(f)
+        
+        # Remove from dependencies
+        deps = config.get("dependencies", {})
+        if package not in deps:
+            log_warn(f"Package '{package}' not found in dependencies")
+            return 1
+        
+        del deps[package]
+        
+        # Save config
+        with open(omni_toml_path, "w") as f:
+            toml.dump(config, f)
+        
+        log_success(f"Removed dependency: {package}")
+        
+        return 0
+    
+    def cmd_update(self, args):
+        """Update dependencies."""
+        project_path = Path(".")
+        for path in [project_path] + list(project_path.parents):
+            if (path / "omni.toml").exists():
+                project_path = path
+                break
+        
+        omni_toml_path = project_path / "omni.toml"
+        if not omni_toml_path.exists():
+            log_error("No omni.toml found.")
+            return 1
+        
+        # Load config
+        with open(omni_toml_path) as f:
+            config = toml.load(f)
+        
+        deps = config.get("dependencies", {})
+        
+        if not deps:
+            log_info("No dependencies to update")
+            return 0
+        
+        log_info("Updating dependencies...")
+        
+        for pkg_name, pkg_spec in deps.items():
+            log_info(f"  - {pkg_name}@{pkg_spec}")
+        
+        log_success("Dependencies updated")
+        
+        return 0
+    
+    def cmd_new(self, args):
+        """Create a new file from template."""
+        template = args.template
+        name = args.name
+        
+        templates = {
+            "struct": """struct {name}:
+    field1: String
+    field2: Int
+    
+impl {name}:
+    fn new() -> {name}:
+        return {name} {{ field1: "".to_string(), field2: 0 }}
+""",
+            "class": """class {name}:
+    fn new()
+    fn greet(self) -> String
+    
+impl {name}:
+    fn new():
+        pass
+    
+    fn greet(self) -> String:
+        return "Hello from {name}!"
+""",
+            "test": """#[test]
+fn test_{name}():
+    let result = true
+    assert(result)
+""",
+            "async": """async fn fetch_{name}(url: String) -> Result<String, Error>:
+    let response = await http_get(url)
+    match response:
+        Ok(data) => Result::Ok(data)
+        Err(e) => Result::Err(e)
+""",
+            "module": """// Module: {name}
+
+pub fn helper_function(x: Int) -> Int:
+    return x * 2
+""",
+        }
+        
+        if template not in templates:
+            log_error(f"Unknown template: {template}")
+            log_info(f"Available templates: {', '.join(templates.keys())}")
+            return 1
+        
+        content = templates[template].format(name=name or "MyStruct")
+        
+        filename = f"{name or 'untitled'}.omni"
+        with open(filename, "w") as f:
+            f.write(content)
+        
+        log_success(f"Created {filename}")
+        
+        return 0
+    
+    def cmd_version(self, args):
+        """Show version information."""
+        print(f"OmniLang CLI v0.3.0")
+        print(f"Home: {self.home_dir}")
+        
+        omnic = self.find_omnic()
+        if omnic:
+            print(f"Compiler: {omnic}")
+        else:
+            print(f"Compiler: not found")
+        
+        return 0
+    
+    def cmd_env(self, args):
+        """Show environment information."""
+        print(f"OmniLang Environment:")
+        print(f"  Home:     {self.home_dir}")
+        print(f"  Cache:    {self.cache_dir}")
+        print(f"  Config:   {self.config_dir}")
+        print(f"  Bin:      {self.bin_dir}")
+        print(f"  Library:  {self.lib_dir}")
+        
+        # Show installed packages
+        if self.lib_dir.exists():
+            packages = [p.name for p in self.lib_dir.iterdir() if p.is_dir()]
+            if packages:
+                print(f"\nInstalled packages:")
+                for pkg in packages:
+                    print(f"  - {pkg}")
+        
+        return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="OmniLang - Unified Development Tool",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  omni init my-project           Create a new project
+  omni build                     Build the current project
+  omni run                       Build and run
+  omni test                      Run tests
+  omni install http              Add http dependency
+  omni fmt                       Format source code
+  omni doc                       Generate documentation
+  omni new struct MyStruct       Create a struct template
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    
+    # init
+    init_parser = subparsers.add_parser("init", help="Initialize a new project")
+    init_parser.add_argument("name", nargs="?", help="Project name")
+    init_parser.add_argument("-t", "--template", choices=["basic", "web", "lib"], 
+                            default="basic", help="Project template")
+    
+    # build
+    build_parser = subparsers.add_parser("build", help="Build the project")
+    build_parser.add_argument("--release", action="store_true", help="Build in release mode")
+    build_parser.add_argument("--target", help="Target architecture (native, wasm, etc.)")
+    
+    # run
+    run_parser = subparsers.add_parser("run", help="Build and run the project")
+    run_parser.add_argument("--release", action="store_true", help="Run in release mode")
+    run_parser.add_argument("--target", help="Target architecture")
+    run_parser.add_argument("args", nargs="*", help="Arguments to pass to the program")
+    
+    # test
+    test_parser = subparsers.add_parser("test", help="Run tests")
+    
+    # fmt
+    fmt_parser = subparsers.add_parser("fmt", help="Format source code")
+    fmt_parser.add_argument("files", nargs="*", help="Files to format")
+    
+    # doc
+    doc_parser = subparsers.add_parser("doc", help="Generate documentation")
+    
+    # install
+    install_parser = subparsers.add_parser("install", help="Install a dependency")
+    install_parser.add_argument("package", help="Package to install (name@version)")
+    
+    # remove
+    remove_parser = subparsers.add_parser("remove", help="Remove a dependency")
+    remove_parser.add_argument("package", help="Package to remove")
+    
+    # update
+    update_parser = subparsers.add_parser("update", help="Update dependencies")
+    
+    # new
+    new_parser = subparsers.add_parser("new", help="Create a new file from template")
+    new_parser.add_argument("template", help="Template type (struct, class, test, async, module)")
+    new_parser.add_argument("name", nargs="?", help="Name for the template")
+    
+    # version
+    version_parser = subparsers.add_parser("version", help="Show version information")
+    
+    # env
+    env_parser = subparsers.add_parser("env", help="Show environment information")
+    
+    args = parser.parse_args()
+    
+    if not args.command:
+        parser.print_help()
+        return 0
+    
+    cli = OmniCLI()
+    
+    # Dispatch to appropriate command handler
+    commands = {
+        "init": cli.cmd_init,
+        "build": cli.cmd_build,
+        "run": cli.cmd_run,
+        "test": cli.cmd_test,
+        "fmt": cli.cmd_fmt,
+        "doc": cli.cmd_doc,
+        "install": cli.cmd_install,
+        "remove": cli.cmd_remove,
+        "update": cli.cmd_update,
+        "new": cli.cmd_new,
+        "version": cli.cmd_version,
+        "env": cli.cmd_env,
+    }
+    
+    handler = commands.get(args.command)
+    if handler:
+        return handler(args)
+    else:
+        log_error(f"Unknown command: {args.command}")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,34 @@
+// Pattern Matching in OmniLang
+// Demonstrates match expressions and enums
+
+enum Result[T, E]:
+    Ok(T)
+    Err(E)
+
+fn divide(a: Int, b: Int) -> Result[Int, String]:
+    if b == 0:
+        return Result.Err("Division by zero")
+    return Result.Ok(a / b)
+
+fn main(args: [String]) -> Int:
+    let x: Int = 10
+    let y: Int = 2
+    
+    let result = divide(x, y)
+    
+    match result:
+        Ok(value) =>
+            println("Result: " + value)
+        Err(error) =>
+            println("Error: " + error)
+    
+    // Pattern matching with ranges
+    let num: Int = 42
+    
+    match num:
+        0 => println("Zero")
+        1..=10 => println("Small number")
+        11..=100 => println("Medium number")
+        _ => println("Large number")
+    
+    return 0

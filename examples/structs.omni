@@ -1,0 +1,50 @@
+// Structs and Methods in OmniLang
+// Demonstrates OOP features
+
+struct Point:
+    x: Float
+    y: Float
+
+struct Circle:
+    center: Point
+    radius: Float
+
+impl Point:
+    fn new(x: Float, y: Float) -> Point:
+        return Point(x: x, y: y)
+    
+    fn distance_to(self, other: Point) -> Float:
+        let dx = self.x - other.x
+        let dy = self.y - other.y
+        return sqrt(dx * dx + dy * dy)
+
+impl Circle:
+    fn new(x: Float, y: Float, radius: Float) -> Circle:
+        return Circle(
+            center: Point(x: x, y: y),
+            radius: radius
+        )
+    
+    fn area(self) -> Float:
+        return 3.14159 * self.radius * self.radius
+    
+    fn contains(self, point: Point) -> Bool:
+        return self.center.distance_to(point) <= self.radius
+
+fn main(args: [String]) -> Int:
+    let p1 = Point.new(0.0, 0.0)
+    let p2 = Point.new(3.0, 4.0)
+    
+    let distance = p1.distance_to(p2)
+    println("Distance: " + distance)
+    
+    let circle = Circle.new(0.0, 0.0, 5.0)
+    println("Circle area: " + circle.area())
+    
+    let test_point = Point.new(3.0, 0.0)
+    if circle.contains(test_point):
+        println("Point is inside circle")
+    else:
+        println("Point is outside circle")
+    
+    return 0

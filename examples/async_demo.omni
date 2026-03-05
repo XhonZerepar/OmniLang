@@ -1,0 +1,225 @@
+// Example: Async/Await Demonstration
+// Demonstrates async/await syntax and concurrent programming
+
+// Async function that simulates a delay
+async fn fetch_data(url: String) -> Result<String, String> {
+    println("Fetching: " + url);
+    
+    // Simulate network delay
+    await sleep(1000);
+    
+    return Result::Ok("Data from " + url);
+}
+
+// Async function that fetches multiple URLs concurrently
+async fn fetch_all(urls: Vec<String>) -> Vec<Result<String, String>> {
+    let mut tasks = Vec::new();
+    
+    // Start all fetch tasks
+    for url in urls {
+        tasks.push(fetch_data(url));
+    }
+    
+    // Wait for all tasks to complete
+    let results = await gather(tasks);
+    return results;
+}
+
+// Async function that runs multiple tasks concurrently
+async fn parallel_example() -> Void {
+    println("Starting parallel tasks...");
+    
+    // Create async tasks
+    let task1 = async fn() -> Int {
+        await sleep(1000);
+        return 1;
+    };
+    
+    let task2 = async fn() -> Int {
+        await sleep(500);
+        return 2;
+    };
+    
+    let task3 = async fn() -> Int {
+        await sleep(200);
+        return 3;
+    };
+    
+    // Run all tasks concurrently and wait for results
+    let results = await gather([
+        task1(),
+        task2(),
+        task3(),
+    ]);
+    
+    println("Results: " + results);
+}
+
+// Async function that demonstrates select/await
+async fn race_example() -> Int {
+    let task1 = async fn() -> Int {
+        await sleep(1000);
+        return 1;
+    };
+    
+    let task2 = async fn() -> Int {
+        await sleep(500);
+        return 2;
+    };
+    
+    // Race - returns as soon as any task completes
+    let result = await select(task1(), task2());
+    return result;
+}
+
+// Async function with error handling
+async fn robust_fetch(url: String) -> Result<String, Error> {
+    let result = try await fetch_data(url);
+    return Result::Ok(result);
+}
+
+// Channel for async communication
+struct Channel<T> {
+    sender: Sender<T>,
+    receiver: Receiver<T>,
+}
+
+struct Sender<T> {
+    // Internal implementation
+}
+
+struct Receiver<T> {
+    // Internal implementation
+}
+
+impl<T> Channel<T> {
+    fn new() -> (Sender<T>, Receiver<T>) {
+        // Create a new channel
+        return (Sender { }, Receiver { });
+    }
+}
+
+impl<T> Sender<T> {
+    async fn send(&self, value: T) -> Void {
+        // Send value to channel
+    }
+}
+
+impl<T> Receiver<T> {
+    async fn receive(&self) -> T {
+        // Receive value from channel
+    }
+}
+
+// Async mutex for shared state
+struct Mutex<T> {
+    data: T,
+    locked: Bool,
+}
+
+impl<T> Mutex<T> {
+    fn new(data: T) -> Mutex<T> {
+        Mutex {
+            data,
+            locked: false,
+        }
+    }
+
+    async fn lock(&self) -> MutexGuard<T> {
+        // Wait until mutex is available
+        while self.locked {
+            await sleep(10);
+        }
+        return MutexGuard { mutex: self };
+    }
+}
+
+struct MutexGuard<'a, T> {
+    mutex: &'a Mutex<T>,
+}
+
+impl<'a, T> MutexGuard<'a, T> {
+    fn get(&self) -> &T {
+        return &self.mutex.data;
+    }
+
+    fn get_mut(&mut self) -> &mut T {
+        return &mut self.mutex.data;
+    }
+}
+
+// Sleep for a duration (milliseconds)
+async fn sleep(millis: Int) -> Void {
+    // Implementation would use async runtime
+    // For now, just a placeholder
+}
+
+// Gather multiple async tasks
+async fn gather<T>(tasks: Vec<Future<T>>) -> Vec<T> {
+    let mut results = Vec::new();
+    // Wait for all tasks
+    return results;
+}
+
+// Select between multiple async operations
+async fn select<T>(tasks: ...) -> T {
+    // Return as soon as any task completes
+}
+
+// Future type placeholder
+struct Future<T> {
+    // Async task handle
+}
+
+// Error type for robust error handling
+struct Error {
+    message: String,
+    code: Int,
+}
+
+impl Error {
+    fn new(message: String) -> Error {
+        Error {
+            message,
+            code: 0,
+        }
+    }
+}
+
+// Main function
+fn main(args: [String]) -> Int {
+    println("=== Async/Await Demo ===");
+
+    // Run async example
+    // Note: In full implementation, this would use an async runtime
+    
+    println("Starting async operations...");
+    
+    // Example of what async code would look like
+    let urls = Vec::new();
+    urls.push("https://api.example.com/data1");
+    urls.push("https://api.example.com/data2");
+    urls.push("https://api.example.com/data3");
+    
+    // This would be: let results = await fetch_all(urls);
+    println("Would fetch " + urls.len() + " URLs concurrently");
+    
+    // Parallel example
+    // This would be: await parallel_example();
+    println("Would run 3 tasks in parallel");
+    
+    // Race example
+    // This would be: let winner = await race_example();
+    println("Would race two tasks against each other");
+    
+    // Channel example
+    let (sender, receiver) = Channel::new();
+    println("Created async channel");
+    
+    // Mutex example
+    let mutex = Mutex::new(42);
+    println("Created async mutex with value: " + mutex.data);
+
+    println("=== Demo Complete ===");
+    return 0;
+}

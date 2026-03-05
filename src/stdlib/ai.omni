@@ -1,0 +1,608 @@
+//! OmniLang Standard Library - AI/ML Module
+//! 
+//! Provides AI and machine learning primitives for client-side inference.
+//! Leverages tensors and planned GPU support for efficient computation.
+
+module std::ai;
+
+import std::tensor::Tensor;
+
+/// AI Model trait for inference
+pub trait Model {
+    type Input;
+    type Output;
+    
+    /// Run inference on input
+    fn infer(&self, input: Self::Input) -> Result<Self::Output, String>;
+    
+    /// Get model metadata
+    fn metadata(&self) -> ModelMetadata;
+}
+
+/// Model metadata
+pub struct ModelMetadata {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub input_shape: Vec<Int>,
+    pub output_shape: Vec<Int>,
+    pub parameters: Int,
+}
+
+/// Tensor-based model
+pub struct TensorModel {
+    weights: HashMap<String, Tensor>,
+    metadata: ModelMetadata,
+}
+
+impl TensorModel {
+    /// Load model from files
+    pub fn load(path: &str) -> Result<TensorModel, String> {
+        // Implementation would load model files
+        Ok(TensorModel {
+            weights: HashMap::new(),
+            metadata: ModelMetadata {
+                name: "loaded_model".to_string(),
+                version: "1.0".to_string(),
+                description: "".to_string(),
+                input_shape: vec![1, 784],
+                output_shape: vec![1, 10],
+                parameters: 0,
+            },
+        })
+    }
+    
+    /// Create model from tensors
+    pub fn from_tensors(weights: HashMap<String, Tensor>, metadata: ModelMetadata) -> TensorModel {
+        TensorModel { weights, metadata }
+    }
+    
+    /// Run inference
+    pub fn predict(&self, input: Tensor) -> Result<Tensor, String> {
+        // Simplified inference - just return input for now
+        Ok(input)
+    }
+}
+
+/// Natural Language Processing
+pub mod nlp {
+    use super::*;
+    
+    /// Text classifier
+    pub struct TextClassifier {
+        model: TensorModel,
+    }
+    
+    impl TextClassifier {
+        /// Create classifier
+        pub fn new(model: TensorModel) -> TextClassifier {
+            TextClassifier { model }
+        }
+        
+        /// Classify text
+        pub fn classify(&self, text: &str) -> Result<ClassificationResult, String> {
+            // Tokenize
+            let tokens = tokenize(text);
+            
+            // Create input tensor (simplified)
+            let input = Tensor::zeros(vec![1, 100]);
+            
+            // Run inference
+            let output = self.model.predict(input)?;
+            
+            Ok(ClassificationResult {
+                labels: vec!["positive".to_string(), "negative".to_string()],
+                scores: vec![0.8, 0.2],
+            })
+        }
+    }
+    
+    /// Classification result
+    pub struct ClassificationResult {
+        pub labels: Vec<String>,
+        pub scores: Vec<Float>,
+    }
+    
+    /// Tokenize text
+    fn tokenize(text: &str) -> Vec<String> {
+        text.split_whitespace()
+            .map(|s| s.to_lowercase())
+            .collect()
+    }
+    
+    /// Sentiment analyzer
+    pub struct SentimentAnalyzer {
+        classifier: TextClassifier,
+    }
+    
+    impl SentimentAnalyzer {
+        /// Create analyzer
+        pub fn new() -> SentimentAnalyzer {
+            SentimentAnalyzer {
+                classifier: TextClassifier::new(TensorModel::load("sentiment_model").unwrap_or_else(|_| {
+                    TensorModel::from_tensors(HashMap::new(), ModelMetadata {
+                        name: "dummy".to_string(),
+                        version: "1.0".to_string(),
+                        description: "".to_string(),
+                        input_shape: vec![1, 100],
+                        output_shape: vec![1, 2],
+                        parameters: 0,
+                    })
+                })),
+            }
+        }
+        
+        /// Analyze sentiment
+        pub fn analyze(&self, text: &str) -> Result<SentimentScore, String> {
+            let result = self.classifier.classify(text)?;
+            Ok(SentimentScore {
+                score: result.scores[0],
+                label: if result.scores[0] > 0.5 { "positive" } else { "negative" }.to_string(),
+                confidence: result.scores[0].abs() - (result.scores[1].abs() - 0.5).abs(),
+            })
+        }
+    }
+    
+    /// Sentiment score
+    pub struct SentimentScore {
+        pub score: Float,
+        pub label: String,
+        pub confidence: Float,
+    }
+    
+    /// Simple keyword extractor
+    pub fn extract_keywords(text: &str, count: Int) -> Vec<(String, Int)> {
+        let mut word_freq: HashMap<String, Int> = HashMap::new();
+        
+        for word in text.split_whitespace() {
+            let cleaned = word.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
+            if cleaned.len() > 3 {
+                *word_freq.entry(cleaned).or_insert(0) += 1;
+            }
+        }
+        
+        let mut keywords: Vec<(String, Int)> = word_freq.into_iter().collect();
+        keywords.sort_by(|a, b| b.1.cmp(&a.1));
+        keywords.truncate(count);
+        keywords
+    }
+    
+    /// Text similarity (simple)
+    pub fn similarity(text1: &str, text2: &str) -> Float {
+        let words1: Vec<String> = tokenize(text1);
+        let words2: Vec<String> = tokenize(text2);
+        
+        let set1: Vec<String> = words1.clone().into_iter().collect();
+        let set2: Vec<String> = words2.clone().into_iter().collect();
+        
+        let intersection = set1.iter().filter(|w| set2.contains(w)).count();
+        let union = set1.len() + set2.len() - intersection;
+        
+        if union == 0 { 0.0 } else { intersection as Float / union as Float }
+    }
+}
+
+/// Computer Vision
+pub mod vision {
+    use super::*;
+    
+    /// Image classifier
+    pub struct ImageClassifier {
+        model: TensorModel,
+    }
+    
+    impl ImageClassifier {
+        /// Create classifier
+        pub fn new(model: TensorModel) -> ImageClassifier {
+            ImageClassifier { model }
+        }
+        
+        /// Classify image from tensor
+        pub fn classify(&self, image: Tensor) -> Result<ImageClass, String> {
+            // Run inference
+            let output = self.model.predict(image)?;
+            
+            // Get top prediction (simplified)
+            Ok(ImageClass {
+                label: "object".to_string(),
+                confidence: 0.9,
+            })
+        }
+    }
+    
+    /// Image classification result
+    pub struct ImageClass {
+        pub label: String,
+        pub confidence: Float,
+    }
+    
+    /// Object detector
+    pub struct ObjectDetector {
+        model: TensorModel,
+    }
+    
+    impl ObjectDetector {
+        /// Detect objects in image
+        pub fn detect(&self, image: Tensor) -> Result<Vec<DetectedObject>, String> {
+            // Simplified detection
+            Ok(vec![DetectedObject {
+                label: "object".to_string(),
+                confidence: 0.9,
+                bbox: BBox { x: 0, y: 0, width: 100, height: 100 },
+            }])
+        }
+    }
+    
+    /// Detected object
+    pub struct DetectedObject {
+        pub label: String,
+        pub confidence: Float,
+        pub bbox: BBox,
+    }
+    
+    /// Bounding box
+    pub struct BBox {
+        pub x: Int,
+        pub y: Int,
+        pub width: Int,
+        pub height: Int,
+    }
+}
+
+/// Feature extraction
+pub mod features {
+    /// Extract features from text
+    pub fn text_features(text: &str) -> Vec<Float> {
+        let mut features = Vec::new();
+        
+        // Length features
+        features.push(text.len() as Float);
+        features.push(text.split_whitespace().count() as Float);
+        
+        // Character features
+        let letters = text.chars().filter(|c| c.is_alphabetic()).count();
+        let digits = text.chars().filter(|c| c.is_numeric()).count();
+        features.push(letters as Float);
+        features.push(digits as Float);
+        
+        // Normalize
+        features
+    }
+    
+    /// Extract features from numbers
+    pub fn numeric_features(values: Vec<Float>) -> Vec<Float> {
+        let mut features = Vec::new();
+        
+        if values.is_empty() {
+            return features;
+        }
+        
+        // Mean
+        let sum: Float = values.iter().sum();
+        let mean = sum / values.len() as Float;
+        features.push(mean);
+        
+        // Standard deviation
+        let variance: Float = values.iter().map(|v| (v - mean).pow(2.0)).sum::<Float>() / values.len() as Float;
+        features.push(variance.sqrt());
+        
+        // Min/Max
+        features.push(values.iter().cloned().fold(Float::INFINITY, Float::min));
+        features.push(values.iter().cloned().fold(Float::NEG_INFINITY, Float::max));
+        
+        features
+    }
+}
+
+/// Neural network layers
+pub mod layers {
+    use super::*;
+    
+    /// Dense (fully connected) layer
+    pub struct Dense {
+        weights: Tensor,
+        bias: Tensor,
+        activation: Activation,
+    }
+    
+    impl Dense {
+        /// Create dense layer
+        pub fn new(input_size: Int, output_size: Int, activation: Activation) -> Dense {
+            Dense {
+                weights: Tensor::random(vec![input_size, output_size]),
+                bias: Tensor::zeros(vec![1, output_size]),
+                activation,
+            }
+        }
+        
+        /// Forward pass
+        pub fn forward(&self, input: Tensor) -> Tensor {
+            // matmul + bias + activation
+            let output = input.matmul(&self.weights) + &self.bias;
+            self.activation.apply(&output)
+        }
+    }
+    
+    /// Activation functions
+    pub enum Activation {
+        Relu,
+        Sigmoid,
+        Softmax,
+        Tanh,
+        None,
+    }
+    
+    impl Activation {
+        fn apply(&self, input: &Tensor) -> Tensor {
+            match self {
+                Activation::Relu => input.relu(),
+                Activation::Sigmoid => input.sigmoid(),
+                Activation::Softmax => input.softmax(),
+                Activation::Tanh => input.tanh(),
+                Activation::None => input.clone(),
+            }
+        }
+    }
+    
+    /// Convolutional layer (simplified)
+    pub struct Conv2d {
+        filters: Tensor,
+        bias: Tensor,
+        kernel_size: Int,
+        stride: Int,
+    }
+    
+    impl Conv2d {
+        /// Create conv layer
+        pub fn new(channels: Int, filters: Int, kernel_size: Int) -> Conv2d {
+            Conv2d {
+                filters: Tensor::random(vec![filters, channels, kernel_size, kernel_size]),
+                bias: Tensor::zeros(vec![1, filters]),
+                kernel_size,
+                stride: 1,
+            }
+        }
+        
+        /// Forward pass
+        pub fn forward(&self, input: Tensor) -> Tensor {
+            // Simplified conv
+            input
+        }
+    }
+    
+    /// Pooling layer
+    pub enum Pooling {
+        Max,
+        Average,
+    }
+    
+    /// Dropout layer
+    pub struct Dropout {
+        rate: Float,
+    }
+    
+    impl Dropout {
+        pub fn new(rate: Float) -> Dropout {
+            Dropout { rate }
+        }
+        
+        pub fn forward(&self, input: &Tensor) -> Tensor {
+            // Simplified - just return input during inference
+            input.clone()
+        }
+    }
+}
+
+/// Optimizers
+pub mod optimizers {
+    /// SGD optimizer
+    pub struct SGD {
+        learning_rate: Float,
+        momentum: Float,
+    }
+    
+    impl SGD {
+        pub fn new(learning_rate: Float) -> SGD {
+            SGD {
+                learning_rate,
+                momentum: 0.9,
+            }
+        }
+        
+        pub fn step(&self, params: &mut Tensor, gradients: &Tensor) -> () {
+            // Simplified SGD step
+        }
+    }
+    
+    /// Adam optimizer
+    pub struct Adam {
+        learning_rate: Float,
+        beta1: Float,
+        beta2: Float,
+        epsilon: Float,
+    }
+    
+    impl Adam {
+        pub fn new(learning_rate: Float) -> Adam {
+            Adam {
+                learning_rate,
+                beta1: 0.9,
+                beta2: 0.999,
+                epsilon: 1e-8,
+            }
+        }
+        
+        pub fn step(&self, params: &mut Tensor, gradients: &Tensor) -> () {
+            // Simplified Adam step
+        }
+    }
+}
+
+/// Loss functions
+pub mod losses {
+    /// Mean squared error
+    pub fn mse(pred: &Tensor, target: &Tensor) -> Float {
+        let diff = pred - target;
+        (diff.clone() * &diff).mean()
+    }
+    
+    /// Cross entropy loss
+    pub fn cross_entropy(pred: &Tensor, target: &Tensor) -> Float {
+        // Simplified cross entropy
+        -(target * &pred.log()).mean()
+    }
+    
+    /// Binary cross entropy
+    pub fn binary_cross_entropy(pred: &Tensor, target: &Tensor) -> Float {
+        let epsilon = 1e-7;
+        let pred = pred.clamp(epsilon, 1.0 - epsilon);
+        -((target * &pred.log()) + &((1.0 - target) * &(1.0 - pred).log())).mean()
+    }
+}
+
+/// Pre-trained models
+pub mod pretrained {
+    /// Load MobileNet for image classification
+    pub fn mobilenet() -> Result<TensorModel, String> {
+        TensorModel::load("mobilenet")
+    }
+    
+    /// Load BERT for text classification
+    pub fn bert() -> Result<TensorModel, String> {
+        TensorModel::load("bert")
+    }
+    
+    /// Load GPT model (simplified)
+    pub fn gpt() -> Result<TensorModel, String> {
+        TensorModel::load("gpt")
+    }
+    
+    /// Load Whisper for speech recognition
+    pub fn whisper() -> Result<TensorModel, String> {
+        TensorModel::load("whisper")
+    }
+}
+
+/// The Oracle - AI assistant for task creation
+pub mod oracle {
+    use super::*;
+    
+    /// Oracle AI for natural language task creation
+    pub struct Oracle {
+        model: TensorModel,
+    }
+    
+    impl Oracle {
+        /// Create Oracle instance
+        pub fn new() -> Oracle {
+            Oracle {
+                model: TensorModel::load("oracle_model").unwrap_or_else(|_| {
+                    TensorModel::from_tensors(HashMap::new(), ModelMetadata {
+                        name: "oracle".to_string(),
+                        version: "1.0".to_string(),
+                        description: "AI assistant for task management".to_string(),
+                        input_shape: vec![1, 512],
+                        output_shape: vec![1, 100],
+                        parameters: 0,
+                    })
+                }),
+            }
+        }
+        
+        /// Parse natural language to create task
+        pub fn create_task(&self, description: &str) -> Result<TaskSpec, String> {
+            // Extract keywords
+            let keywords = nlp::extract_keywords(description, 5);
+            
+            // Determine priority
+            let priority = if description.contains("urgent") || description.contains("asap") {
+                Priority::High
+            } else if description.contains("whenever") || description.contains("someday") {
+                Priority::Low
+            } else {
+                Priority::Normal
+            };
+            
+            // Determine category
+            let category = if description.contains("work") || description.contains("meeting") {
+                Category::Work
+            } else if description.contains("exercise") || description.contains("gym") {
+                Category::Health
+            } else if description.contains("buy") || description.contains("shop") {
+                Category::Shopping
+            } else {
+                Category::Personal
+            };
+            
+            // Estimate duration (simplified)
+            let duration = if description.contains("quick") || description.contains("short") {
+                15
+            } else if description.contains("long") || description.contains("hours") {
+                120
+            } else {
+                30
+            };
+            
+            Ok(TaskSpec {
+                title: description.to_string(),
+                description: description.to_string(),
+                priority,
+                category,
+                estimated_minutes: duration,
+                tags: keywords.iter().map(|(k, _)| k.clone()).collect(),
+            })
+        }
+        
+        /// Suggest habits based on goals
+        pub fn suggest_habits(&self, goal: &str) -> Vec<HabitSpec> {
+            // Simplified habit suggestions
+            vec![
+                HabitSpec {
+                    name: "Daily exercise".to_string(),
+                    frequency: "daily".to_string(),
+                    reminder_time: Some("07:00".to_string()),
+                },
+            ]
+        }
+    }
+    
+    /// Task specification
+    pub struct TaskSpec {
+        pub title: String,
+        pub description: String,
+        pub priority: Priority,
+        pub category: Category,
+        pub estimated_minutes: Int,
+        pub tags: Vec<String>,
+    }
+    
+    /// Priority levels
+    pub enum Priority {
+        Low,
+        Normal,
+        High,
+        Urgent,
+    }
+    
+    /// Task categories
+    pub enum Category {
+        Work,
+        Personal,
+        Health,
+        Shopping,
+        Learning,
+        Other,
+    }
+    
+    /// Habit specification
+    pub struct HabitSpec {
+        pub name: String,
+        pub frequency: String,
+        pub reminder_time: Option<String>,
+    }
+}
+
+// Re-export for convenience
+pub use nlp::*;
+pub use vision::*;
+pub use oracle::*;

@@ -1,0 +1,427 @@
+// OmniLang Standard Library - HTTP Module
+// Provides HTTP client and server functionality
+
+module std::http
+
+// HTTP methods
+pub enum Method:
+    Get
+    Post
+    Put
+    Delete
+    Patch
+    Head
+    Options
+
+// HTTP version
+pub enum HttpVersion:
+    Http10
+    Http11
+    Http2
+    Http3
+
+// HTTP status codes
+pub enum StatusCode:
+    // 1xx Informational
+    Continue: 100
+    SwitchingProtocols: 101
+    Processing: 102
+    
+    // 2xx Success
+    Ok: 200
+    Created: 201
+    Accepted: 202
+    NoContent: 204
+    PartialContent: 206
+    
+    // 3xx Redirection
+    MovedPermanently: 301
+    Found: 302
+    SeeOther: 303
+    NotModified: 304
+    TemporaryRedirect: 307
+    PermanentRedirect: 308
+    
+    // 4xx Client Errors
+    BadRequest: 400
+    Unauthorized: 401
+    Forbidden: 403
+    NotFound: 404
+    MethodNotAllowed: 405
+    Conflict: 409
+    Gone: 410
+    LengthRequired: 411
+    PayloadTooLarge: 413
+    UriTooLong: 414
+    UnsupportedMediaType: 415
+    RangeNotSatisfiable: 416
+    ExpectationFailed: 417
+    Teapot: 418
+    
+    // 5xx Server Errors
+    InternalServerError: 500
+    NotImplemented: 501
+    BadGateway: 502
+    ServiceUnavailable: 503
+    GatewayTimeout: 504
+    HttpVersionNotSupported: 505
+
+// HTTP header
+pub struct Header:
+    name: String
+    value: String
+
+// HTTP headers collection
+pub struct Headers:
+    _headers: HashMap<String, String>
+
+impl Headers:
+    pub fn new() -> Headers:
+        return Headers { _headers: HashMap::new() }
+    
+    pub fn set(&mut self, name: String, value: String):
+        self._headers.set(name.to_lowercase(), value)
+    
+    pub fn get(&self, name: String) -> Option<String>:
+        return self._headers.get(name.to_lowercase())
+    
+    pub fn has(&self, name: String) -> Bool:
+        return self._headers.contains_key(name.to_lowercase())
+    
+    pub fn remove(&mut self, name: String):
+        self._headers.remove(name.to_lowercase())
+    
+    pub fn iter(&self) -> [(String, String)]:
+        return self._headers.iter().map(|(k, v) => (k, v)).collect()
+    
+    pub fn len(&self) -> Int:
+        return self._headers.len()
+    
+    pub fn clear(&mut self):
+        self._headers.clear()
+    
+    // Common headers
+    pub fn content_type(&self) -> Option<String>:
+        return self.get("content-type")
+    
+    pub fn set_content_type(&mut self, content_type: String):
+        self.set("content-type", content_type)
+    
+    pub fn content_length(&self) -> Option<String>:
+        return self.get("content-length")
+    
+    pub fn set_content_length(&mut self, length: Int):
+        self.set("content-length", length.to_string())
+    
+    pub fn authorization(&self) -> Option<String>:
+        return self.get("authorization")
+    
+    pub fn set_authorization(&mut self, auth: String):
+        self.set("authorization", auth)
+
+// HTTP request
+pub struct Request:
+    method: Method
+    url: String
+    headers: Headers
+    body: Option<String>
+    version: HttpVersion
+    timeout: Int  // milliseconds
+
+impl Request:
+    pub fn new(method: Method, url: String) -> Request:
+        return Request {
+            method: method,
+            url: url,
+            headers: Headers::new(),
+            body: Option::None,
+            version: HttpVersion::Http11,
+            timeout: 30000
+        }
+    
+    pub fn get(url: String) -> Request:
+        return Request::new(Method::Get, url)
+    
+    pub fn post(url: String) -> Request:
+        return Request::new(Method::Post, url)
+    
+    pub fn put(url: String) -> Request:
+        return Request::new(Method::Put, url)
+    
+    pub fn delete(url: String) -> Request:
+        return Request::new(Method::Delete, url)
+    
+    pub fn with_header(&mut self, name: String, value: String) -> Request:
+        self.headers.set(name, value)
+        return self
+    
+    pub fn with_body(&mut self, body: String) -> Request:
+        self.body = Option::Some(body)
+        self.headers.set_content_length(body.len())
+        return self
+    
+    pub fn with_json(&mut self, json: String) -> Request:
+        self.headers.set_content_type("application/json")
+        self.body = Option::Some(json)
+        return self
+    
+    pub fn with_timeout(&mut self, timeout: Int) -> Request:
+        self.timeout = timeout
+        return self
+    
+    pub fn with_auth(&mut self, token: String) -> Request:
+        self.headers.set_authorization("Bearer " + token)
+        return self
+
+// HTTP response
+pub struct Response:
+    status: StatusCode
+    status_text: String
+    headers: Headers
+    body: Option<String>
+    version: HttpVersion
+
+impl Response:
+    pub fn new(status: StatusCode) -> Response:
+        return Response {
+            status: status,
+            status_text: status_text_for(status),
+            headers: Headers::new(),
+            body: Option::None,
+            version: HttpVersion::Http11
+        }
+    
+    pub fn ok() -> Response:
+        return Response::new(StatusCode::Ok)
+    
+    pub fn created() -> Response:
+        return Response::new(StatusCode::Created)
+    
+    pub fn not_found() -> Response:
+        return Response::new(StatusCode::NotFound)
+    
+    pub fn error() -> Response:
+        return Response::new(StatusCode::InternalServerError)
+    
+    pub fn with_body(&mut self, body: String) -> Response:
+        self.body = Option::Some(body)
+        self.headers.set_content_length(body.len())
+        return self
+    
+    pub fn with_json(&mut self, json: String) -> Response:
+        self.headers.set_content_type("application/json")
+        return self.with_body(json)
+    
+    pub fn with_header(&mut self, name: String, value: String) -> Response:
+        self.headers.set(name, value)
+        return self
+    
+    pub fn is_success(&self) -> Bool:
+        let code = self.status as Int
+        return code >= 200 && code < 300
+    
+    pub fn is_redirect(&self) -> code = self.status Bool:
+        let as Int
+        return code >= 300 && code < 400
+    
+    pub fn is_client_error(&self) -> Bool:
+        let code = self.status as Int
+        return code >= 400 && code < 500
+    
+    pub fn is_server_error(&self) -> Bool:
+        let code = self.status as Int
+        return code >= 500
+
+// HTTP client
+pub struct Client:
+    timeout: Int
+    follow_redirects: Bool
+    max_redirects: Int
+
+impl Client:
+    pub fn new() -> Client:
+        return Client {
+            timeout: 30000,
+            follow_redirects: true,
+            max_redirects: 10
+        }
+    
+    pub fn with_timeout(&mut self, timeout: Int) -> Client:
+        self.timeout = timeout
+        return self
+    
+    pub fn with_redirects(&mut self, follow: Bool) -> Client:
+        self.follow_redirects = follow
+        return self
+    
+    pub fn request(&self, req: Request) -> Result<Response, Error>:
+        return native_http_request(req, self.timeout, self.follow_redirects)
+    
+    pub fn get(&self, url: String) -> Result<Response, Error>:
+        return self.request(Request::get(url))
+    
+    pub fn post(&self, url: String, body: String) -> Result<Response, Error>:
+        return self.request(Request::post(url).with_body(body))
+    
+    pub fn put(&self, url: String, body: String) -> Result<Response, Error>:
+        return self.request(Request::put(url).with_body(body))
+    
+    pub fn delete(&self, url: String) -> Result<Response, Error>:
+        return self.request(Request::delete(url))
+    
+    pub fn json(&self, url: String) -> Result<String, Error>:
+        let req = Request::get(url).with_header("Accept", "application/json")
+        let resp = self.request(req)?
+        
+        if not resp.is_success():
+            return Result::Err(Error::new("HTTP error: " + (resp.status as Int).to_string()))
+        
+        match resp.body:
+            Some(body) => Result::Ok(body)
+            None => Result::Ok("{}".to_string())
+
+// HTTP server
+pub struct Server:
+    address: String
+    port: Int
+    handler: Option<Fn(Request) -> Response>
+
+impl Server:
+    pub fn new(address: String, port: Int) -> Server:
+        return Server {
+            address: address,
+            port: port,
+            handler: Option::None
+        }
+    
+    pub fn with_handler(&mut self, handler: Fn(Request) -> Response) -> Server:
+        self.handler = Option::Some(handler)
+        return self
+    
+    pub fn start(&self) -> Result<(), Error>:
+        if self.handler.is_none():
+            return Result::Err(Error::new("No handler configured"))
+        
+        return native_http_server(self.address, self.port, self.handler)
+    
+    pub fn stop(&self) -> Result<(), Error>:
+        return native_http_server_stop()
+
+// Helper function to get status text
+fn status_text_for(code: StatusCode) -> String:
+    match code:
+        StatusCode::Continue => "Continue"
+        StatusCode::SwitchingProtocols => "Switching Protocols"
+        StatusCode::Processing => "Processing"
+        StatusCode::Ok => "OK"
+        StatusCode::Created => "Created"
+        StatusCode::Accepted => "Accepted"
+        StatusCode::NoContent => "No Content"
+        StatusCode::PartialContent => "Partial Content"
+        StatusCode::MovedPermanently => "Moved Permanently"
+        StatusCode::Found => "Found"
+        StatusCode::SeeOther => "See Other"
+        StatusCode::NotModified => "Not Modified"
+        StatusCode::TemporaryRedirect => "Temporary Redirect"
+        StatusCode::PermanentRedirect => "Permanent Redirect"
+        StatusCode::BadRequest => "Bad Request"
+        StatusCode::Unauthorized => "Unauthorized"
+        StatusCode::Forbidden => "Forbidden"
+        StatusCode::NotFound => "Not Found"
+        StatusCode::MethodNotAllowed => "Method Not Allowed"
+        StatusCode::Conflict => "Conflict"
+        StatusCode::Gone => "Gone"
+        StatusCode::LengthRequired => "Length Required"
+        StatusCode::PayloadTooLarge => "Payload Too Large"
+        StatusCode::UriTooLong => "URI Too Long"
+        StatusCode::UnsupportedMediaType => "Unsupported Media Type"
+        StatusCode::RangeNotSatisfiable => "Range Not Satisfiable"
+        StatusCode::ExpectationFailed => "Expectation Failed"
+        StatusCode::Teapot => "I'm a teapot"
+        StatusCode::InternalServerError => "Internal Server Error"
+        StatusCode::NotImplemented => "Not Implemented"
+        StatusCode::BadGateway => "Bad Gateway"
+        StatusCode::ServiceUnavailable => "Service Unavailable"
+        StatusCode::GatewayTimeout => "Gateway Timeout"
+        StatusCode::HttpVersionNotSupported => "HTTP Version Not Supported"
+        _ => "Unknown"
+
+// URL parsing
+pub struct Url:
+    scheme: String
+    host: String
+    port: Option<Int>
+    path: String
+    query: Option<String>
+    fragment: Option<String>
+
+impl Url:
+    pub fn parse(url: String) -> Result<Url, Error>:
+        return native_url_parse(url)
+    
+    pub fn to_string(&self) -> String:
+        var result = self.scheme + "://" + self.host
+        
+        match self.port:
+            Some(p) => result = result + ":" + p.to_string()
+            None => ()
+        
+        result = result + self.path
+        
+        match self.query:
+            Some(q) => result = result + "?" + q
+            None => ()
+        
+        match self.fragment:
+            Some(f) => result = result + "#" + f
+            None => ()
+        
+        return result
+    
+    pub fn scheme(&self) -> String:
+        return self.scheme
+    
+    pub fn host(&self) -> String:
+        return self.host
+    
+    pub fn port(&self) -> Option<Int>:
+        return self.port
+    
+    pub fn path(&self) -> String:
+        return self.path
+    
+    pub fn query(&self) -> Option<String>:
+        return self.query
+    
+    pub fn fragment(&self) -> Option<String>:
+        return self.fragment
+    
+    pub fn is_https(&self) -> Bool:
+        return self.scheme == "https"
+    
+    pub fn is_http(&self) -> Bool:
+        return self.scheme == "http"
+
+// Query string parsing
+pub fn parse_query(query: String) -> HashMap<String, String>:
+    let params = HashMap::new()
+    
+    if query == "":
+        return params
+    
+    for pair in query.split("&"):
+        let parts = pair.split("=")
+        if parts.len() == 2:
+            let key = url_decode(parts[0])
+            let value = url_decode(parts[1])
+            params.set(key, value)
+    
+    return params
+
+// URL encoding
+pub fn url_encode(s: String) -> String:
+    return native_url_encode(s)
+
+// URL decoding  
+pub fn url_decode(s: String) -> String:
+    return native_url_decode(s)

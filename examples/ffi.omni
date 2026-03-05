@@ -1,0 +1,49 @@
+// Foreign Function Interface in OmniLang
+// Demonstrates calling C functions and inline foreign code
+
+// Import C functions
+extern "C":
+    fn printf(format: *const Char, ...) -> Int
+    fn malloc(size: usize) -> *mut Void
+    fn free(ptr: *mut Void) -> Int
+    fn sqrt(n: Float) -> Float
+
+// Safe wrapper for C functions
+fn print_float(n: Float):
+    printf("%.2f\n", n)
+
+fn calculate_hypotenuse(a: Float, b: Float) -> Float:
+    let a_squared = a * a
+    let b_squared = b * b
+    let result = sqrt(a_squared + b_squared)
+    return result
+
+// Inline Python code
+python:
+def python_function():
+    return "Hello from Python!"
+
+// Inline JavaScript
+javascript:
+function jsFunction() {
+    return "Hello from JavaScript!";
+}
+
+fn main(args: [String]) -> Int:
+    // Call C functions
+    print_float(3.14159)
+    
+    let a = 3.0
+    let b = 4.0
+    let c = calculate_hypotenuse(a, b)
+    println("Hypotenuse: " + c)
+    
+    // Use Python function
+    let py_result = python()
+    println(py_result)
+    
+    // Use JavaScript function
+    let js_result = js()
+    println(js_result)
+    
+    return 0

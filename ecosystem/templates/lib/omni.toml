@@ -1,0 +1,180 @@
+// OmniLang Library Template
+// Reusable library project
+
+// ============================================
+// PROJECT STRUCTURE
+// ============================================
+// src/
+//   lib.omni          - Library entry point and exports
+//   module1.omni      - First module
+//   module2.omni      - Second module
+//   internal/         - Internal (private) modules
+// tests/
+//   lib_test.omni     - Library tests
+// benches/
+//   benchmark.omni   - Performance benchmarks
+// examples/
+//   usage.omni       - Usage example
+// omni.toml           - Project configuration
+// README.md           - Documentation
+
+// ============================================
+// LIBRARY ENTRY POINT
+// ============================================
+
+// Module declarations
+pub mod module1
+pub mod module2
+
+// Re-export commonly used types
+pub use module1::MyStruct
+pub use module1::create_thing
+
+// ============================================
+// MODULE 1 - Example
+// ============================================
+
+module library::module1
+
+// Public struct
+pub struct MyStruct:
+    value: Int
+    name: String
+
+impl MyStruct:
+    pub fn new(value: Int, name: String) -> MyStruct:
+        return MyStruct {
+            value: value,
+            name: name
+        }
+    
+    pub fn get_value(&self) -> Int:
+        return self.value
+    
+    pub fn set_value(&mut self, value: Int):
+        self.value = value
+    
+    pub fn greet(&self) -> String:
+        return "Hello, " + self.name + "!"
+
+// Public function
+pub fn create_thing(value: Int) -> MyStruct:
+    return MyStruct::new(value, "Default")
+
+// Private function (not exported)
+fn internal_helper(x: Int) -> Int:
+    return x * 2
+
+// ============================================
+// MODULE 2 - Example
+// ============================================
+
+module library::module2
+
+pub struct AnotherType:
+    data: [Int]
+
+impl AnotherType:
+    pub fn new() -> AnotherType:
+        return AnotherType { data: [] }
+    
+    pub fn add(&mut self, value: Int):
+        self.data.push(value)
+    
+    pub fn sum(&self) -> Int:
+        var total = 0
+        for item in self.data:
+            total = total + item
+        return total
+    
+    pub fn len(&self) -> Int:
+        return self.data.len()
+    
+    pub fn is_empty(&self) -> Bool:
+        return self.data.len() == 0
+
+// Trait example
+pub trait Serializable:
+    fn to_json(&self) -> String
+    fn from_json(json: String) -> Self
+
+impl Serializable for AnotherType:
+    fn to_json(&self) -> String:
+        return "{ \"data\": " + self.data.to_json() + " }"
+    
+    fn from_json(json: String) -> AnotherType:
+        // Parse JSON and create instance
+        return AnotherType::new()
+
+// ============================================
+// TESTS
+// ============================================
+
+#[test]
+fn test_my_struct():
+    let s = MyStruct::new(42, "Test")
+    assert_eq(s.get_value(), 42)
+    assert_eq(s.greet(), "Hello, Test!")
+
+#[test]
+fn test_another_type():
+    let mut t = AnotherType::new()
+    assert(t.is_empty())
+    
+    t.add(1)
+    t.add(2)
+    t.add(3)
+    
+    assert_eq(t.len(), 3)
+    assert_eq(t.sum(), 6)
+
+#[test]
+fn test_serializable():
+    let mut t = AnotherType::new()
+    t.add(10)
+    t.add(20)
+    
+    let json = t.to_json()
+    let t2 = AnotherType::from_json(json)
+    
+    assert_eq(t.len(), t2.len())
+
+// ============================================
+// BENCHMARKS
+// ============================================
+
+#[bench]
+fn bench_creation():
+    for _ in 0..10000:
+        let _ = MyStruct::new(42, "bench")
+
+#[bench]
+fn bench_operations():
+    let mut t = AnotherType::new()
+    for i in 0..1000:
+        t.add(i)
+    
+    let _ = t.sum()
+
+// ============================================
+// EXAMPLE USAGE
+// ============================================
+
+// Examples show how to use the library
+// Run with: omni run --example usage
+
+fn example_main():
+    // Create a struct
+    let thing = MyStruct::new(100, "World")
+    println(thing.greet())
+    
+    // Use another type
+    let mut numbers = AnotherType::new()
+    for i in 1..=10:
+        numbers.add(i)
+    
+    println("Sum: " + numbers.sum().to_string())
+    
+    // Serialize
+    let json = numbers.to_json()
+    println("JSON: " + json)
